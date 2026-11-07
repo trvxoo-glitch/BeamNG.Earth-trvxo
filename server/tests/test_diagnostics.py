@@ -188,7 +188,12 @@ class MinidumpSwitchTest(unittest.TestCase):
             finally:
                 launcher.IS_WIN = was
                 os.environ.pop("BNGE_CRASH_DUMPS", None)
-            self.assertIsNone(launcher.crash_dumps_on(d), "not Windows: off")
+            launcher.IS_WIN = False
+            try:
+                self.assertIsNone(launcher.crash_dumps_on(d), "not Windows: off")
+            finally:
+                launcher.IS_WIN = was
+            self.assertIsNone(launcher.crash_dumps_on(d), "from source (no exe named): off, even on Windows")
             open(os.path.join(d, "dumps", "a.dmp"), "w").close()
             self.assertEqual(launcher.new_dumps(d, time.time() - 5), [os.path.join(d, "dumps", "a.dmp")])
             self.assertEqual(launcher.new_dumps(d, time.time() + 5), [])

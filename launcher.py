@@ -496,8 +496,10 @@ def crash_dumps_on(log_dir, exe=None, winreg=None):
     workers: the same exe), in <logs>/dumps, the last DUMPS_KEEP. faulthandler's text dump has the Python stacks only;
     a crash on a native thread (the -e run's road tile worker) needs the native frames, which only a minidump holds.
     Only a crash nothing handled makes one (not the exceptions the native code catches). Per user and per exe name,
-    under HKEY_CURRENT_USER (no administrator); BNGE_CRASH_DUMPS=0 leaves it off. Returns the folder, or None."""
-    if not IS_WIN or os.environ.get("BNGE_CRASH_DUMPS", "").strip() == "0":
+    under HKEY_CURRENT_USER (no administrator); BNGE_CRASH_DUMPS=0 leaves it off. Only the packaged app, unless an exe
+    is named: from source the exe is python.exe, and every Python crash on the machine would leave a dump here.
+    Returns the folder, or None."""
+    if not IS_WIN or os.environ.get("BNGE_CRASH_DUMPS", "").strip() == "0" or (exe is None and not FROZEN):
         return None
     exe = os.path.basename(exe or sys.executable)
     folder = os.path.join(log_dir, DUMPS_DIR)

@@ -192,7 +192,8 @@ def collect(out, logs_dir, user_dir=None, app_dir=None, now=None):
         for d, _dirs, names in os.walk(sess):
             for n in names[:4000]:
                 try:
-                    rows.append("%10d  %s" % (os.path.getsize(os.path.join(d, n)), os.path.relpath(os.path.join(d, n), sess)))
+                    rel = os.path.relpath(os.path.join(d, n), sess).replace(os.sep, "/")   # (the same on Windows)
+                    rows.append("%10d  %s" % (os.path.getsize(os.path.join(d, n)), rel))
                 except OSError:
                     pass
             if len(rows) > 20000:
