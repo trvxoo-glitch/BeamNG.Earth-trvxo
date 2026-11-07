@@ -8,6 +8,7 @@ row groups whose bbox touches the cell are read, and geometry only for a group t
 row. A cell is remembered for the session.
 """
 import json
+import logsetup
 import logging
 import os
 import re
@@ -295,7 +296,8 @@ def features_of(rows):
             continue
         try:
             kind, parts = mapgeom.parse_wkb(wkb)
-        except Exception:
+        except Exception as e_fb:
+            logsetup.fallback("earthd.picnicsource", "a picnic feature's geometry was unreadable: skipped", e_fb)
             continue
         if kind not in (mapgeom.POINT, mapgeom.POLYGON) or not parts:
             continue

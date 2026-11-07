@@ -1892,9 +1892,12 @@ function M.update(gov, currentAnchor, player, view, a)
   if due then
     reloadWaits = 0
     local t0 = now()
+    local gapMs = sinceReload()
     noteNewColliders()
     be:reloadCollision()
     lastReloadAt, reloads = now(), reloads + 1
+    local okD, dl = pcall(require, 'beamngEarth/diaglog')       -- (the minute line's rebuilds: diaglog.lua)
+    if okD and dl and dl.collisionRebuild then pcall(dl.collisionRebuild, now() - t0, gapMs, urgent, (dl.now and dl.now()) or 0) end
     collisionDirty, deletesDirty, sinceReload = false, false, stopwatch.new()
     local ms = now() - t0
     -- out of the frame's budget, not into the meshes' cost estimate (from PR #41: a ~40 ms rebuild in the roadWalk

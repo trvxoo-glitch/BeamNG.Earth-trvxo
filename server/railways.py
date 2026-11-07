@@ -16,6 +16,7 @@ import math
 import re
 
 import os
+import logsetup
 
 import numpy as np
 
@@ -298,7 +299,8 @@ def flat_rail_crossing(frame, bridge_xy, road_xy, at, elev=None):
     la, lo, _ = frame.enu_to_geodetic(pts[:, 0], pts[:, 1], 0.0)
     try:
         z = np.asarray(elev(np.asarray(la, np.float64), np.asarray(lo, np.float64)), np.float64).ravel()
-    except Exception:
+    except Exception as e:
+        logsetup.fallback("earthd.railways", "the ground under a railway unknown: not on its ground", e)
         return False
     if not np.all(np.isfinite(z)):
         return False
@@ -318,7 +320,8 @@ def _coarse_here(frame, box):
     try:
         la, lo, _ = frame.enu_to_geodetic(0.5 * (box[0] + box[2]), 0.5 * (box[1] + box[3]), 0.0)
         return bool(COARSE_AT(float(la), float(lo)))
-    except Exception:
+    except Exception as e_fb:
+        logsetup.fallback("earthd.railways", "the coarse DEM check under a railway failed: taken as fine", e_fb)
         return False
 
 

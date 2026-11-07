@@ -2,6 +2,42 @@
 
 What changed in each release of BeamNG.Earth, newest first.
 
+## Unreleased
+
+### Added
+- **Profiling from saved runs** (docs/LOGGING.md): the mod keeps the last 10 seconds of frames and saves them when a
+  hitch of a second or more happens, so one bad hitch can be looked at afterwards. Hitch lines now include the GPU's
+  time. `tools/profile_trace.py` turns server.log, hitch captures and the profiler's export into one timeline for
+  Perfetto or chrome://tracing, and `tools/perfbase.py` saves a run's numbers and says what got worse in a later run.
+- **A health line every minute, settings changes and each block's way to the game in server.log**: memory per
+  process, worker queues and restarts, how busy the server was, free disk; what the player changed on the settings
+  page; and for each block, how long it took to build and to be committed in the game.
+- **One file for a bug report from the game or the app**: the report window's "Add logs" button, or
+  `BeamNG.Earth.exe --collect-logs`, zips every log, crash file and minidump, the game's log, hitch captures and the
+  latest reports, with personal details hidden. Windows keeps a minidump when a server process crashes, and the last
+  ten runs' logs are kept (up to 40 MB) instead of two.
+- **Game crashes, the game's errors and the server's side of a hitch in server.log** (docs/LOGGING.md): the exit
+  record says whether the game left a crash dump or exited with an error code. The mod's extension errors that only
+  reached beamng.log are copied in. Each game hitch of 500 ms or more is followed by what the server was doing during
+  it. The game's lines say when they arrived late, and a native module panic logs its backtrace.
+- **Clearer crash, fallback and mod lines in server.log** (docs/LOGGING.md): a native crash's dump names the process
+  and whether the fault was in Python or on a thread of the native code. Places that silently carried on after an
+  error (an unreadable cell, an unknown ground height) log it once and count the rest. The mod's own warnings and
+  errors reach server.log under their area, with repeats limited, and a debug area can be turned on in the mod. One
+  log area in a loop is capped at 400 lines a minute so it cannot push the rest of a session out.
+- **Reading and sending logs** (docs/LOGGING.md): `tools/logdigest.py` turns a server.log into a one-page summary
+  (when it ran and how it ended, warnings and errors by how often, tracebacks, the worst hitches, ground and grading
+  notes) or shows a window of lines by time, area, level, text or place. `tools/collect_logs.py` zips the logs and
+  the game's log into one file with the user name, home folder and key or token values hidden. A log now ends with
+  why: the server logs its normal shutdown and the launcher adds the exit code (a crash, a kill) to server.log.
+- **More in the logs for finding problems** (docs/LOGGING.md): server.log now starts with what made it (the release,
+  Python, the OS, the machine, the options and switches that differ from the defaults, the mod's version). Rail
+  crossings whose road and track grading disagree, and humps in a road's profile, are logged with their coordinates.
+  The game logs each ground block's surface layers and their ground models, the collision rebuilds, and what the
+  wheels drive on when that changes, so a road that drives like dirt can be traced. `earthd --debug grading,surface`
+  turns on debug lines for those areas only, in the worker processes too, and a crash in any thread is logged with
+  its traceback.
+
 ## 1.8.2 beta (2026-11-05)
 
 > **Join the TGForever Discord, [discord.gg/tgf](https://discord.gg/tgf), to chat, get help, report bugs or help

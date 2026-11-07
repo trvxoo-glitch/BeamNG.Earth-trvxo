@@ -16,6 +16,7 @@ yard places the same grid and keeps the boxes inside its own square, so a yard o
 doubled and not cut in half. Deterministic (hashed yaw, colour and which boxes stay).
 """
 import json
+import logsetup
 import logging
 import math
 
@@ -145,7 +146,8 @@ def _layer(md, keys, name):
     for key in keys:
         try:
             feats = md.cell(key, layers=(name,), kind="demand").layers.get(name)
-        except Exception:
+        except Exception as e_fb:
+            logsetup.fallback("earthd.worldprops", "a cell for world props was unreadable: left out", e_fb)
             continue
         if feats is None or len(getattr(feats, "kind", ())) == 0:
             continue
@@ -203,7 +205,8 @@ def _tags_of(feats, i):
     if text and text != "nan":
         try:
             got = json.loads(text)
-        except Exception:
+        except Exception as e_fb:
+            logsetup.fallback("earthd.worldprops", "a world props file was not valid JSON: empty", e_fb)
             got = {}
     got = memo[i] = got if isinstance(got, dict) else {}
     return got
@@ -344,7 +347,8 @@ def _barns(frame, feats, rows, box, placed, skip):
         xy = _ring_xy(feats, i, frame)
         try:
             _, u, hl, hw = buildings.oriented_box(xy)
-        except Exception:
+        except Exception as e_fb:
+            logsetup.fallback("earthd.worldprops", "a prop footprint's box failed: skipped", e_fb)
             continue
         scale = float(2.0 * hl) / BARN_LEN
         if not (BARN_SCALE[0] <= scale <= BARN_SCALE[1]):
@@ -409,7 +413,8 @@ def _yards(frame, feats):
             continue
         try:
             c, u, hl, hw = buildings.oriented_box(xy)
-        except Exception:
+        except Exception as e_fb:
+            logsetup.fallback("earthd.worldprops", "a prop footprint's box failed: skipped", e_fb)
             continue
         fid = ids[i] if ids is not None else (round(float(c[0]), 1), round(float(c[1]), 1))
         v = np.array([-float(u[1]), float(u[0])])

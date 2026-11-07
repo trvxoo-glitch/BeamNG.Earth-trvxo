@@ -49,6 +49,7 @@ import argparse
 import hashlib
 import json
 import logging
+import logsetup
 import os
 import sys
 import threading
@@ -406,7 +407,8 @@ class MapData:
                     p = json.loads(str(z["provenance"]))
         except FileNotFoundError:
             return None                 # (not remembered: it may be built later)
-        except Exception:
+        except Exception as e:
+            logsetup.fallback(log, "a cell's provenance unreadable: none", e)
             p = None
         if len(memo) > 4096:
             memo.clear()

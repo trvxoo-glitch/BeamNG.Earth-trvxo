@@ -16,6 +16,7 @@ spots: either way in, no "street" tracking). Cars park along the curb facing the
 (right-hand traffic). Deterministic: the stations are arc lengths along the road, as furniture.py's.
 """
 import math
+import logsetup
 
 import numpy as np
 from polygon import Path
@@ -251,7 +252,8 @@ def tile_lot_spots(frame, tx, ty, md, elev, items=None, existing=None):
             roads_xy = [ln + np.array(box[:2]) for ln in
                         buildings.road_lines(frame, [c.layers.get("roads") for c in cells], box[0], box[1],
                                                 size=max(box[2] - box[0], box[3] - box[1]))]
-    except Exception:
+    except Exception as e_fb:
+        logsetup.fallback("earthd.parking", "the cells for parking were unreadable: no parking rings", e_fb)
         rings = []
     paths = [Path(np.asarray(b, np.float64)) for b in blockers + rings if len(b) >= 3]
     if paths and existing:
@@ -611,7 +613,8 @@ def finish_markings(frame, tx, ty, md, elev, items=None, marks=()):
         feats = [md.cell(k, layers=("infrastructure",), kind="demand").layers.get("infrastructure")
                  for k in roads.cells_of_tile(frame, tx, ty, margin=0.0)]
         rings = lot_rings(frame, feats, paved_only=True)
-    except Exception:
+    except Exception as e_fb:
+        logsetup.fallback("earthd.parking", "the cells for parking were unreadable: no parking rings", e_fb)
         rings = []
 
     def z_at(x, y):

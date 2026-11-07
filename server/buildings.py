@@ -15,6 +15,7 @@ footprints and a ground-height function; no game state.
 """
 from runtimeprofiler import step as profile_step
 import os
+import logsetup
 import hashlib
 import math
 
@@ -2788,7 +2789,8 @@ def tile_buildings(frame, x0, y0, x1, y1, layers, elev, water=None, part_layers=
         try:
             gz = float(np.asarray(elev(np.array([clat]), np.array([clon])), np.float64)[0])
             alpine = np.isfinite(gz) and gz > tree_line_m(clat)
-        except Exception:
+        except Exception as e:
+            logsetup.fallback("earthd.buildings", "the ground height for the tree line unknown: not alpine", e)
             alpine = False
     # the ground at every building's corners in one call (elev and the frame's conversions are point by point; a
     # call per building cost a far buildings tile ~20 % of its time, 2026-10-20)
@@ -4553,6 +4555,7 @@ def district_town(frame, tx, ty, md):
             continue
         try:
             cells.append((key, md.cell(key, layers=("buildings",), kind="demand").layers.get("buildings")))
-        except Exception:           # not cached / unreadable: counts as empty
+        except Exception as e:      # not cached / unreadable: counts as empty
+            logsetup.fallback("earthd.buildings", "a cell's buildings unreadable for the town coverage: counted empty", e)
             continue
     return district_coverage(lat, lon, cells) < WEST_TOWN_COVERAGE

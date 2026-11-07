@@ -14,6 +14,7 @@ lon, [mapcells.CellKey]), the latest list replacing the earlier one.
 """
 from runtimeprofiler import step as profile_step
 import logging
+import logsetup
 import os
 import queue
 import threading
@@ -193,7 +194,9 @@ def init(cache_dir, offline, roads, grading, road_widths, surface, warm_q, log_l
         budget.lower_priority(nice, worker=True)    # (Windows: the server's class, as inherited)
     except (OSError, AttributeError):
         pass
-    logging.basicConfig(level=log_level, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+    import logsetup     # (the server's format, and its --debug areas: BNGE_DEBUG, inherited)
+    logsetup.worker(log_level)
+    logsetup.install_crash_hooks(log, role="blockworker")
     budget.apply()              # (this process's caches: smaller on a small machine)
     if os.environ.get("BNGE_TRACEMALLOC"):      # debug: this worker's memory (earthd's trace_mem)
         _trace_memory()
@@ -456,6 +459,8 @@ def build(aid, lat, lon, hm_zoom, q, cx, cy, size, out_dir, name, ter_name=None,
         t1 = time.perf_counter()
         if not provisional:
             idx = _tunnel_holes(aid, frame, elev, keep, cx, cy, idx, info, g)
+        if idx is not None:
+            info["paint"] = surfacemod.paint_copy(idx)      # (earthd's ground_probe: what this block says under the car)
         info["ter"], mats = surfacemod.write_ter(out_dir, ter_name, keep["qgrid"], idx)
         if mats is not None:          # the .ter's own material list (MATERIALS indices)
             info["mats"] = mats
@@ -657,7 +662,8 @@ def _where_enu(lat, lon, x0, y0, x1, y1, **settings):
                                       np.zeros(4))
         la, lo = np.asarray(la, float), np.asarray(lo, float)
         return revisit.where(lat, lon, la.min(), lo.min(), la.max(), lo.max(), revisit.sig(**settings))
-    except Exception:
+    except Exception as e_fb:
+        logsetup.fallback("earthd.blockworker", "a revisit's frame could not be made: no revisit check", e_fb)
         return None
 
 

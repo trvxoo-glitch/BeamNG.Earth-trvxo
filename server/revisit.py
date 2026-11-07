@@ -20,6 +20,7 @@ built with (sig(): one short hash per setting, compared with earthd.Server.world
 and the item's box in degrees. compact() (the server's start)
 folds the files into one and drops the lines whose zip is gone."""
 import hashlib
+import logsetup
 import json
 import os
 import re
@@ -432,7 +433,8 @@ def load(cache_dir, kind, k):
             except OSError:
                 pass
         return blobs, meta.get("extra")
-    except Exception:
+    except Exception as e_fb:
+        logsetup.fallback("earthd.revisit", "a revisit archive could not be read: built again", e_fb)
         return None
 
 

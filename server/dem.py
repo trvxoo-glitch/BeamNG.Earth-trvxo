@@ -22,6 +22,7 @@ after the host's miss_ttl (Mapterhorn 90 days: it adds lidar areas; AWS never).
 """
 from runtimeprofiler import step as profile_step
 import contextlib
+import logsetup
 import io
 import json
 import logging
@@ -556,7 +557,8 @@ class Dem:
         for f in futs:
             try:
                 f.result()
-            except Exception:
+            except Exception as e_fb:
+                logsetup.fallback("earthd.dem", "a DEM prefetch failed (read again when needed)", e_fb)
                 pass
 
     def prefetch(self, keys):

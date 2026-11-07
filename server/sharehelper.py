@@ -167,7 +167,8 @@ def main():
     ap.add_argument("--cache", required=True, help="this helper's own cache folder (the map data, DEM, its plans)")
     ap.add_argument("--procs", type=int, default=max(1, (os.cpu_count() or 2) // 2))
     a = ap.parse_args()
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+    import logsetup
+    logsetup.worker(logging.INFO)
     import mpshare
     import plancache
     os.makedirs(a.cache, exist_ok=True)

@@ -97,6 +97,10 @@ function M.frame(ms, now, ctx, hitch, mod, engine)
       local line = string.format('perf hitch %d ms %s', r0(ms), where(c))
       if hitch and next(hitch.mod or {}) then line = line .. ' | mod: ' .. top(hitch.mod, 5, 1) end
       if hitch and next(hitch.engine or {}) then line = line .. ' | engine: ' .. top(hitch.engine, 5, 1) end
+      if hitch and hitch.gpu then
+        line = line .. string.format(' | gpu %.1f ms', hitch.gpu)
+          .. (hitch.waitGpu and hitch.waitGpu >= 1 and string.format(' (CPU waited %.1f ms for it)', hitch.waitGpu) or '')
+      end
       if M.cause(ms, hitch) == M.UNMEASURED then line = line .. ' | ' .. M.UNMEASURED end
       if c.doing and c.doing ~= '' then line = line .. ' | doing: ' .. c.doing end
       if skipped > 0 then line = line .. string.format(' | (%d more hitches since the last line)', skipped) end

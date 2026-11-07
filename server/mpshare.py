@@ -20,6 +20,7 @@ The transport is BeamMP itself: app -> mod -> TriggerServerEvent('bngeShare', "S
 "S|<json>"; items as base64 chunks of CHUNK bytes, paced by a token bucket (OUT_BPS).
 """
 import base64
+import logsetup
 import collections
 import hashlib
 import io
@@ -165,7 +166,8 @@ def valid_plans(data):
                     return False
             meta = json.loads(bytes(f["meta"]).decode("utf-8"))
             return isinstance(meta, dict) and isinstance(meta.get("plans"), list)
-    except Exception:
+    except Exception as e_fb:
+        logsetup.fallback("earthd.mpshare", "a shared array could not be read: refused", e_fb)
         return False
 
 
@@ -407,7 +409,8 @@ class Hub:
         if st["z"]:
             try:
                 data = _inflate(data)
-            except Exception:
+            except Exception as e_fb:
+                logsetup.fallback("earthd.mpshare", "a shared message could not be unpacked: dropped", e_fb)
                 self.wanted.pop(iid, None)
                 self.stats["refused"] += 1
                 return

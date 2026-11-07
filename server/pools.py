@@ -19,6 +19,7 @@ from concurrent.futures.process import BrokenProcessPool
 log = logging.getLogger("earthd.pools")
 
 RESPAWN_S = 10.0
+ALL = []                    # every RespawningPool made in this process (health.py: its processes, queue, restarts)
 QUEUED_POLL_S = 1.0
 
 
@@ -87,6 +88,7 @@ class RespawningPool:
         self._pool = ProcessPoolExecutor(*args, **kwargs)
         self._last = -float("inf")
         self.respawns = 0
+        ALL.append(self)
         self.inflight = 0           # jobs submitted and not done (Server.live_busy: the saved areas' downloads wait)
         # (its own lock: a future cancelled by _renew's shutdown runs _done in that thread, under self._lock)
         self._count_lock = threading.Lock()
@@ -176,6 +178,13 @@ class RespawningPool:
                     pass
                 self._pool = ProcessPoolExecutor(*self._args, **self._kwargs)
             return self._pool
+
+    def pids(self):
+        """The pool's worker processes now (health.py's memory line)."""
+        try:
+            return [p.pid for p in list((getattr(self._pool, "_processes", None) or {}).values()) if p.pid]
+        except Exception:       # (the executor's own dict, changing under it)
+            return []
 
     def recycle(self, why):
         """The pool's processes killed and the pool made again: for a worker that is alive but never answers (a

@@ -27,6 +27,7 @@ the caller passes one: iface).
 """
 
 import contextlib
+import logsetup
 import hashlib
 import io
 import json
@@ -525,7 +526,8 @@ def credited_near(lat, lon, range_m, cache_dir):
                 with open(os.path.join(d, name)) as f:
                     json.load(f)            # (a whole file: model_position below reads it, never fetches)
                 mlat, mlon, _corrected = model_position(int(name[5:-5]), cache_dir)
-            except Exception:
+            except Exception as e_fb:
+                logsetup.fallback("earthd.threedmr", "a 3D model record could not be read: skipped", e_fb)
                 continue
             ll = _near_memo[(d, name)] = (float(mlat), float(mlon))
         if _latlon_dist_m(lat, lon, ll[0], ll[1]) <= range_m:

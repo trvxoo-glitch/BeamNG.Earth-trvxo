@@ -8,6 +8,7 @@ West Coast USA's switchgear (its yard's parts as a kit, a smaller one where it d
 The layouts in Rust (earthfast.power_line_layout, earthfast.substation_yard).
 """
 import numpy as np
+import logsetup
 
 import fast
 
@@ -186,7 +187,8 @@ def _off_roads(frame, md, e, n, ll, clear_m=None):
             for k in [key] + key.neighbours():
                 try:
                     got.append(md.cell(k, layers=("roads",), kind="demand").layers.get("roads"))
-                except Exception:       # (a cell not at hand: the vertex stays where it is mapped)
+                except Exception as e_fb:       # (a cell not at hand: the vertex stays where it is mapped)
+                    logsetup.fallback("earthd.powerlines", "a cell's roads for the power lines were unreadable: left out", e_fb)
                     got.append(None)
             layers[key] = got
         return got

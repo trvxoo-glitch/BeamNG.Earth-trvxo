@@ -16,6 +16,7 @@ pure function of the cached land cover and the heights, so a block rebuilt from 
 the same every time.
 """
 import hashlib
+import logsetup
 from runtimeprofiler import step as profile_step
 import logging
 import math
@@ -1454,6 +1455,89 @@ def used_materials(idx):
     if SNOW in u:
         u.add(LOOSE)
     return sorted(u) or [DIRT]
+
+
+PAINT_STEP = 4          # the kept copy of a block's materials: every PAINT_STEP-th sample (a 1024 block: 64 KB)
+
+
+def paint_copy(idx):
+    """A small copy of a block's MATERIALS indices (row 0 = south, as write_ter takes them) kept for ground_probe: what
+    the files said under the car when its tyres changed ground. None without surface layers. Pure."""
+    if idx is None:
+        return None
+    return np.ascontiguousarray(np.asarray(idx, np.uint8)[::PAINT_STEP, ::PAINT_STEP])
+
+
+def paint_at(grid, size, cx, cy, x, y, square=heightmap.SQUARE, radius_m=4.0):
+    """(name of the material at world (x, y), {name: samples} within radius_m round it, share of asphalt within it) of a
+    paint_copy grid of a size² block centred at (cx, cy); None when (x, y) is off the block or on a hole. Pure."""
+    grid = np.asarray(grid)
+    half = size * square / 2
+    step = PAINT_STEP * square
+    fx, fy = (x - (cx - half)) / step, (y - (cy - half)) / step
+    n = grid.shape[0]
+    if not (0 <= fx < n and 0 <= fy < grid.shape[1]):
+        return None
+    ix, iy = int(fx), int(fy)
+    r = max(1, int(math.ceil(radius_m / step)))
+    win = grid[max(0, iy - r):iy + r + 1, max(0, ix - r):ix + r + 1]
+    names = {}
+    for v, c in zip(*np.unique(win, return_counts=True)):
+        v = int(v)
+        if v != heightmap.TER_HOLE and v < len(MATERIALS):
+            names[MATERIALS[v][0]] = int(c)
+    here = int(grid[iy, ix])
+    if here == heightmap.TER_HOLE or here >= len(MATERIALS):
+        return None
+    total = sum(names.values()) or 1
+    return MATERIALS[here][0], names, names.get(MATERIALS[ASPHALT][0], 0) / total
+
+
+def roads_near(feats_list, lat, lon, radius_m=25.0, widths=None, limit=3):
+    """[(distance m, id, class, text)] of the mapped roads nearest (lat, lon) within radius_m, nearest first: whether the
+    road is painted into the ground (a road with no spec: a path, a track, a service way ...; one that is all bridge or
+    tunnel at the point has no ground part), its width and surface. For ground_probe's log line: a paved road the
+    block's paint left out says why. Pure given the features."""
+    mlat = 111320.0
+    mlon = 111320.0 * max(0.05, math.cos(math.radians(lat)))
+    out = []
+    for f in feats_list:
+        if f is None or not len(f):
+            continue
+        try:
+            specs = roadsmod.road_specs(f, None, widths)
+        except Exception as e_fb:               # (without widths' help: the specs' defaults)
+            logsetup.fallback("earthd.surface", "a road's widths failed: painted with the default widths", e_fb)
+            specs = roadsmod.road_specs(f, None, None)
+        cls = f.attrs.get("class")
+        for i in range(len(f)):
+            best = None
+            for part in f.parts(i):
+                for ring in part:
+                    ll = np.asarray(ring, np.float64)[:, :2]
+                    if len(ll) < 2:
+                        continue
+                    x = (ll[:, 0] - lon) * mlon
+                    y = (ll[:, 1] - lat) * mlat
+                    ax, ay, bx, by = x[:-1], y[:-1], x[1:], y[1:]
+                    dx, dy = bx - ax, by - ay
+                    d2 = np.maximum(dx * dx + dy * dy, 1e-9)
+                    t = np.clip(-(ax * dx + ay * dy) / d2, 0.0, 1.0)
+                    d = float(np.min(np.hypot(ax + t * dx, ay + t * dy)))
+                    best = d if best is None else min(best, d)
+            if best is None or best > radius_m:
+                continue
+            sp = specs[i]
+            name = str(cls[i]) if cls is not None else "?"
+            if sp is None:
+                text = "not painted into the ground (no road spec: a path, track or the like)"
+            elif not len(roadsmod.ground_parts(f, i)):
+                text = f"{sp.width:.1f} m wide, all bridge or tunnel here: not painted into the ground"
+            else:
+                text = f"{sp.width:.1f} m wide, {sp.kind}, painted into the ground"
+            out.append((best, str(f.ids[i]), name, text))
+    out.sort(key=lambda r: r[0])
+    return out[:limit]
 
 
 def write_ter(out_dir, name, qgrid, idx):

@@ -37,6 +37,7 @@ Geometry conventions of the engine's Collada import (verified against golden pai
 """
 from runtimeprofiler import step as profile_step
 import os
+import logsetup
 import struct
 
 import numpy as np
@@ -610,7 +611,8 @@ def is_packed(data):
     """Is this shape file's body compressed? (False for anything that is not a shape file.)"""
     try:
         h, _ = unpack_one(data, 8)
-    except Exception:
+    except Exception as e_fb:
+        logsetup.fallback("earthd.cdae", "a shape file's header could not be read: treated as not ours", e_fb)
         return False
     return isinstance(h, dict) and bool(h.get("compression"))
 

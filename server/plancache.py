@@ -15,6 +15,7 @@ is taken over; a wait longer than WAIT_S plans the cell here as before; a proces
 favoured as itself (xproc.once). Old runs' folders go at server start (prune).
 """
 import logging
+import logsetup
 import json
 import hashlib
 import os
@@ -169,7 +170,8 @@ class PlanCache:
             _frames, sig, versions = self.persist[1]
             # (the sidecar's place: the cell's own centre, no anchor)
             return revisit.where((s + n) / 2, (w + e) / 2, s, w, n, e, revisit.sig(plans=sig, md=versions))
-        except Exception:
+        except Exception as e_fb:
+            logsetup.fallback("earthd.plancache", "a plan cache key's bounds failed: not cached", e_fb)
             return None
 
     def has(self, key):

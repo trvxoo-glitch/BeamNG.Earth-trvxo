@@ -242,6 +242,22 @@ class KeepPreviousLogTest(unittest.TestCase):
             got = {n: open(os.path.join(d, n)).read() for n in os.listdir(d)}
             self.assertEqual(got, {"server.log": "c", "server.log.1": "b", "server.log.2": "a"})
 
+    def test_keeps_runs_by_count_and_size(self):
+        import importlib
+        import os
+        import tempfile
+        launcher = importlib.import_module("launcher")
+        with tempfile.TemporaryDirectory() as d:
+            p = os.path.join(d, "server.log")
+            for run in range(14):
+                launcher.keep_previous_log(p, keep=10, max_bytes=10 ** 9)
+                with open(p, "w") as f:
+                    f.write(str(run))
+            self.assertEqual(sorted(os.listdir(d)), sorted(["server.log"] + [f"server.log.{i}" for i in range(1, 11)]))
+            self.assertEqual(open(p + ".10").read(), "3", "the oldest kept is ten runs back")
+            launcher.keep_previous_log(p, keep=10, max_bytes=2)
+            self.assertEqual(sorted(os.listdir(d)), ["server.log.1"], "the oldest go past the size (the newest always stays)")
+
     def test_empty_log_not_kept(self):
         import importlib
         import os

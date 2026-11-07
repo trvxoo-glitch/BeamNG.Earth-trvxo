@@ -325,6 +325,14 @@ function M.saveNote(text, kind, title)
   form = nil
 end
 
+-- The server's answer to "Add logs" (core.lua's logs_collected).
+function M.onLogsCollected(msg)
+  if not saved then return end
+  if msg.ok then saved.logs = string.format('%s (%d files): attach it to the issue', tostring(msg.path), msg.files or 0)
+  else saved.logs, saved.logsError = nil, tostring(msg.error or 'failed') end
+  saved.untilT = now() + M.SAVED_S
+end
+
 function M.status()
   return { formOpen = form ~= nil, noteOpen = form ~= nil, profilerRunning = prof ~= nil,
     benchRunning = prof ~= nil, saved = count, lastFolder = saved and saved.folder }
@@ -367,7 +375,22 @@ local function drawSaved()
       end
     end
     im.SameLine()
+    if saved.logs ~= 'asked' and im.Button(saved.logs and 'Logs added' or 'Add logs') and not saved.logs then
+      -- the world server's bug report zip (logtools.collect: its logs, crash files, the game's log) into this folder
+      local net = require('beamngEarth/net')
+      if net.isConnected() then
+        net.send({ type = 'collect_logs', dir = saved.dir })
+        saved.logs = 'asked'
+      else
+        saved.logsError = 'the world server is not connected'
+      end
+      saved.untilT = now() + M.SAVED_S
+    end
+    if saved.logs == 'asked' then im.TextUnformatted('collecting the logs...') end
+    im.SameLine()
     if im.Button('Close') then saved = nil end
+    if saved and saved.logsError then wrapped('Logs: ' .. saved.logsError) end
+    if saved and type(saved.logs) == 'string' and saved.logs ~= 'asked' then wrapped('Logs: ' .. saved.logs) end
   end
   im.End()
 end

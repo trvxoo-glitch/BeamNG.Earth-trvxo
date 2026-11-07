@@ -147,6 +147,34 @@ local function setMaterialBase(m, name, path, tex, size)
   m:setField('baseColorBaseTexSize', 0, size)
 end
 
+-- What went wrong with the ground's materials since the last takeIssues (diaglog.lua's "ground issue" lines).
+local issues = {}
+local function issue(text)
+  if #issues < 8 then issues[#issues + 1] = text end
+end
+function M.takeIssues()
+  local out = issues
+  issues = {}
+  return out
+end
+
+-- { [name] = { gm = its groundmodelName, cls = its class } } of the named materials as the engine has them (nil: no
+-- object of that name): diaglog's check that each layer drives as the server meant.
+function M.slotReport(materials)
+  local out = {}
+  if not (scenetree and scenetree.findObject) then return out end
+  for _, nm in ipairs(materials or {}) do
+    local name = type(nm) == 'table' and nm[1] or nm
+    local o = name and scenetree.findObject(name)
+    if o then
+      local okc, cls = pcall(function() return o:getClassName() end)
+      local okg, gm = pcall(function() return o:getField('groundmodelName', 0) end)
+      out[name] = { cls = okc and cls or nil, gm = (okg and gm ~= '' and gm) or nil }
+    end
+  end
+  return out
+end
+
 -- Make sure every { name, groundmodel } exists as a TerrainMaterial (M.MATERIAL is the level's own).
 -- Returns false if one could not be made.
 local function ensureSurfaceMaterials(materials)
@@ -158,7 +186,10 @@ local function ensureSurfaceMaterials(materials)
       -- another object of that name (a weather Precipitation was once called like a material): the
       -- import would bind the layer to nothing and the engine would make it asphalt
       local okc, cls = pcall(function() return existing:getClassName() end)
-      if okc and cls and cls ~= 'TerrainMaterial' then return false end
+      if okc and cls and cls ~= 'TerrainMaterial' then
+        issue(string.format('layer material %s is taken by a %s', tostring(name), tostring(cls)))
+        return false
+      end
     end
     if name ~= M.MATERIAL and not existing then
       local ok = pcall(function()
@@ -176,7 +207,10 @@ local function ensureSurfaceMaterials(materials)
         m.canSave = false
         m:registerObject(name)
       end)
-      if not ok or not scenetree.findObject(name) then return false end
+      if not ok or not scenetree.findObject(name) then
+        issue(string.format('could not make the layer material %s (%s)', tostring(name), tostring(gm)))
+        return false
+      end
     end
   end
   return true
@@ -357,6 +391,7 @@ function M.load(path, squareSize, maxHeight, x, y, z, layers, base, baseSize)
     end
     if not okL then
       log('W', 'beamngEarth', 'surface layers unusable, importing the single dirt layer')
+      issue('surface layers unusable (a mask missing or a material not made): the whole block is the single dirt layer')
       layers = nil
     end
   end
@@ -364,6 +399,7 @@ function M.load(path, squareSize, maxHeight, x, y, z, layers, base, baseSize)
   if not ok then
     -- Ground without a material still collides; it just renders as the placeholder.
     log('W', 'beamngEarth', 'importMaps with material failed (' .. tostring(err) .. '), retrying without')
+    issue('importMaps with its materials failed (' .. tostring(err) .. '): the block has no material')
     ok, err = importMaps(tb, path, squareSize, maxHeight, false)
     if not ok then return false, err end
   end

@@ -21,6 +21,7 @@ flagged as bridge / tunnel or off ground level are left out), the navgraph.
 """
 import json
 import logging
+import logsetup
 import math
 import collections
 import hashlib
@@ -5983,7 +5984,8 @@ class BridgeProfiles:
             dd[k] = DECK_FULL_DEPTH if depth is None else depth
         try:
             channel = bridgetypes.nav_span(self.frame, lines) if nav > 0 else 0.0
-        except Exception:
+        except Exception as e:
+            logsetup.fallback(log, "bridge navigation span unknown: none assumed", e)
             channel = 0.0
         water = self._water(lines, nav, depth, channel)
         if not water and nav > 0 and bridge_profile_mode() == "curve":
@@ -7292,7 +7294,8 @@ def block_arch_raise(tunnels, cell_fn, frame, la, lo, z, box):
         for key in keys:
             try:
                 cells.append(cell_fn(key))
-            except Exception:
+            except Exception as e:
+                logsetup.fallback(log, "a cell for the tunnels unreadable: left out", e)
                 cells.append(None)
         parts = tunnels.parts(cells, box)
         if not parts or not tunnels.heights:
@@ -8212,7 +8215,8 @@ def _abutments(pts, ground_fn):
         ends = np.asarray(pts, np.float64)[[0, -1]]
         g = np.asarray(ground_fn(ends[:, :2]), np.float64)
         return [(float(e[0]), float(e[1])) for e, gz in zip(ends, g) if e[2] - gz <= ABUT_GROUND_M]
-    except Exception:
+    except Exception as e:
+        logsetup.fallback(log, "a bridge's ends' ground unknown: no abutments", e)
         return []
 
 

@@ -18,6 +18,7 @@ and the class defaults stay. Pure; RoadWidths memoises per road for the life of 
 physics block, grading, the road meshes and the surface masks always agree.
 """
 import logging
+import logsetup
 import os
 import threading
 from collections import OrderedDict
@@ -314,7 +315,8 @@ class RoadWidths:
             for k2 in (key,):
                 try:
                     feats = self.cell_fn(k2)
-                except Exception:
+                except Exception as e_fb:
+                    logsetup.fallback("earthd.roadwidth", "a neighbour cell for the road widths was unreadable: incomplete", e_fb)
                     feats, complete = None, False       # (not kept: built again once the cell is at hand)
                 if feats is not None and len(feats):
                     parts.append(polygon_walls(feats, frame))

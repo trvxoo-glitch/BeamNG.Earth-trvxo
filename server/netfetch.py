@@ -40,6 +40,7 @@ One User-Agent for the whole project (USER_AGENT): the app, its version and the 
 user name, e-mail, machine name, location or session id is ever sent.
 """
 import collections
+import logsetup
 import ioprofiler
 import netstate
 import email.utils
@@ -674,7 +675,8 @@ class HttpsTransport:
         if got["fn"] is not fn or now - got["at"] > cls.SYSTEM_PROXIES_S:
             try:
                 val = fn() or {}
-            except Exception:
+            except Exception as e_fb:
+                logsetup.fallback("earthd.netfetch", "a download's stats source failed: empty", e_fb)
                 val = {}
             got.update(fn=fn, at=now, val=val)
         return got["val"]
