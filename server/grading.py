@@ -305,6 +305,11 @@ UNDER_LIDAR_DECK_M = roadsmod.AT_GRADE_M
 # coarse models (their smeared embankments are wider than that: UNDER_RUN_*).
 UNDER_DECK_ON = os.environ.get("BNE_UNDER_DECK_GROUND", "on") != "off"
 UNDER_DECK_SIDE_M = 15.0    # m past a deck's side the road's ground is read (Assaku's hump: 6-13 m past its decks)
+# A walkway bridge is not a road, so it never becomes a deck. The elevation still has it: a footbridge across a
+# motorway cut is a ridge of ground in the carriageway (a catwalk over I-87 at Lake George, GitHub #802). Its span
+# caps the road under it the same way a road deck does, and nothing else (no ramp, no abutment).
+WALK_SPAN_CLASSES = {"footway", "path", "pedestrian", "cycleway", "bridleway", "steps"}
+WALK_SPAN_HALF_M = 4.0      # m: the walkway, wide enough that the side read covers the ridge the elevation leaves
 UNDER_DECK_MAX_M = 30.0     # m along the road a deck covers at most either side of the crossing (an oblique one)
 UNDER_DECK_PAD_M = 3.0 * SIGMA_MAJOR_M + PROFILE_STEP + UNDER_DECK_SIDE_M + UNDER_DECK_MAX_M    # m round a cell: the
                             # farthest its plans' samples reach past its box (their extensions), and a deck's window
@@ -334,7 +339,6 @@ CW_MIN_SIN = 0.3        # two carriageways crossing at a flatter angle are not a
 CW_STACK_SIN = 0.03      # decks at different levels crossing more steeply than this (2 degrees) are separated
 CW_OVERLAP_MAX_M = 120.0  # m either side of a crossing two decks' clearance is held along at most
 CW_OVERLAP_STEP_M = 12.0  # m between the points two overlapping decks' clearance is held at
-CW_PIN_W = 1e5          # weight holding a chain's end to the kept (lower-level) chain it branches from
 
 
 def _cw_level(q):
@@ -680,7 +684,7 @@ def _add_cuts(frame, plans, elev):
     if not jobs:
         return
     allp = np.concatenate([q for _, q, _ in jobs])
-    la, lo, _ = frame.enu_to_geodetic(allp[:, 0], allp[:, 1], 0.0)
+    la, lo = enu_to_ll_dense(frame, allp[:, 0], allp[:, 1])
     g = np.asarray(elev(np.asarray(la), np.asarray(lo)), f64)       # (as plan_roads' heights)
     k = 0
     for p, q, o in jobs:
@@ -707,6 +711,32 @@ def _add_cuts(frame, plans, elev):
                 cut[:, c] = np.minimum(cut[:, c], zmin + getattr(p, "max_wall", WALL_MAX_H_M))
             if np.isfinite(cut[:, 0]).any() or np.isfinite(cut[:, 3]).any():
                 p.cut = cut
+
+
+LL_GRID_M = 32.0       # m: enu_to_ll_dense's node spacing (the frame's conversion is smooth to < 0.1 mm over a cell)
+
+
+def enu_to_ll_dense(frame, x, y, step=LL_GRID_M):
+    """(lat, lon) of many points (x, y) in frame: the frame's exact conversion at the nodes of a step-m grid over
+    them, interpolated between the nodes (earthfast grid_bilinear2); a scattered few (more nodes than a quarter of
+    the points) converted one by one. _add_cuts' millions of probes: their conversion was most of its time."""
+    import fast
+    fast.require(158, "grid_bilinear2")
+    x = np.ascontiguousarray(x, np.float64)
+    y = np.ascontiguousarray(y, np.float64)
+    if len(x) == 0:
+        return np.zeros(0), np.zeros(0)
+    x0 = math.floor(float(x.min()) / step) * step
+    y0 = math.floor(float(y.min()) / step) * step
+    nx = int(math.ceil((float(x.max()) - x0) / step)) + 2
+    ny = int(math.ceil((float(y.max()) - y0) / step)) + 2
+    if nx * ny * 4 > len(x):
+        la, lo, _ = frame.enu_to_geodetic(x, y, 0.0)
+        return np.asarray(la, np.float64), np.asarray(lo, np.float64)
+    gx, gy = np.meshgrid(x0 + step * np.arange(nx), y0 + step * np.arange(ny))
+    gla, glo, _ = frame.enu_to_geodetic(gx.ravel(), gy.ravel(), 0.0)
+    return fast._ef.grid_bilinear2(np.asarray(gla, np.float64).reshape(ny, nx),
+                                   np.asarray(glo, np.float64).reshape(ny, nx), x0, y0, step, x, y)
 
 
 def _point_along(line, d):
@@ -881,12 +911,10 @@ def _plan(xy, z, spec, abut=(False, False), ext=(0, 0), step=PROFILE_STEP, bank_
             # Limit the artificial damage alone, not the real climb. Integrating clipped TOTAL height differences
             # then smoothing the lost height back over 40 m made local pits into long hills/dips. Two local sweeps
             # bound neighbouring damage values without accumulating an offset down the road. Keep the ends pinned.
-            damage[0] = 0.0
-            for i in range(1, len(damage)):
-                damage[i] = min(max(damage[i], damage[i - 1] - cap), damage[i - 1] + cap)
-            damage[-1] = 0.0
-            for i in range(len(damage) - 2, -1, -1):
-                damage[i] = min(max(damage[i], damage[i + 1] - cap), damage[i + 1] + cap)
+            # (native: dirtsteps.rs, the same two sweeps; Python loops per sample before)
+            import fast
+            fast.require(157, "dirt_step_clamp")
+            damage = np.asarray(fast._ef.dirt_step_clamp(np.ascontiguousarray(damage, np.float64), float(cap)))
         zs = zs + damage
     # thin to VERTEX_STEP (the profile stays smooth between: linear in the grading pass); a minor dirt road keeps
     # every sample, or its potholes would be smoothed away by the linear stretches between the vertices
@@ -1650,6 +1678,8 @@ class _Planner:
         return property(get, put)
     shared = _store_attr("shared")
     wet = _store_attr("wet")
+    water = _store_attr("water")
+    tunnel_raw = _store_attr("tunnel_raw")
     dem = _store_attr("dem")
     del _store_attr
 
@@ -1895,10 +1925,11 @@ class _Planner:
                     kept.extend((fid, q) for q in pieces)
                     tplans.extend((fid, q) for q in (pieces if cl else [p]))
                 plans = kept
-            secs = self._tunnel_sections(feats, key, [p for _f, p in tplans])
+            portals = {}
+            secs = self._tunnel_sections(feats, key, [p for _f, p in tplans], portals)
             plans.extend((fid + TUNNEL_TAG, Plan(xy, z, spec.width / 2 + shoulder(spec)))
                          for fid, spec, xy, z, k in secs if k == 0)
-            plans.extend(self._mouth_plans(secs))
+            plans.extend(self._mouth_plans(secs, portals))
             covers = [(xy, spec.width / 2 + TUNNEL_KEEP_M) for _f, spec, xy, _z, k in _twin_trimmed(secs) if k]
             opens = [(xy, spec) for _f, spec, xy, _z, k in secs if k == 0]
         else:
@@ -2799,8 +2830,10 @@ class _Planner:
             if chains:
                 prof = self._cw_cluster_solve(chains)
         except Exception as e:      # the rules as before rather than no grading
-            log.debug("grading: carriageways of %s: %s: %s", hk, type(e).__name__, e)
-            prof = {}
+            import revisit
+            revisit.fault()         # incomplete profiles must not become a persistent plan/region
+            log.warning("grading: carriageways of %s: %s: %s", hk, type(e).__name__, e)
+            return {"parts": parts, "prof": {}, "failed": True}
         return {"parts": parts, "prof": prof}
 
     def _cw_cluster_solve(self, chains):
@@ -3040,9 +3073,13 @@ class _Planner:
                 if a_ in loc and b_ in loc:
                     cp.append((loc[a_], i_, loc[b_], j_, kind, v))
                 elif a_ in loc and zs[b_] is not None:
-                    d_[loc[a_]]["t"][i_], d_[loc[a_]]["w"][i_] = zs[b_][j_], CW_PIN_W
+                    d = d_[loc[a_]]
+                    d["lo"][i_] = max(d["lo"][i_], zs[b_][j_])
+                    d["hi"][i_] = min(d["hi"][i_], zs[b_][j_])
                 elif b_ in loc and zs[a_] is not None:
-                    d_[loc[b_]]["t"][j_], d_[loc[b_]]["w"][j_] = zs[a_][i_], CW_PIN_W
+                    d = d_[loc[b_]]
+                    d["lo"][j_] = max(d["lo"][j_], zs[a_][i_])
+                    d["hi"][j_] = min(d["hi"][j_], zs[a_][i_])
 
             def bound(lst, cp_):
                 for nu, ju, nl, jl, clear in lst:
@@ -3054,14 +3091,21 @@ class _Planner:
                         d_[loc[nl]]["hi"][jl] = min(d_[loc[nl]]["hi"][jl], zs[nu][ju] - clear)
             bound(seps, cp)
             mine = [t_ for t_ in ties if t_[0] in loc]
+            def solve_stage():
+                info = {}
+                profiles = _cw.solve(d_, cp, deadline=deadline, diagnostics=info)
+                if not info["converged"]:
+                    raise RuntimeError(f"carriageway level {L}: {info['status']} (feasible={info['feasible']})")
+                return profiles
+
             if mine:
-                pre = _cw.solve(d_, cp, deadline=deadline)
+                pre = solve_stage()
                 tie_seps = []
                 for na, ia, nb, ib, q, sin, ua in mine:
                     a_up = pre[loc[na]][nearest(na, ia, q)] >= pre[loc[nb]][nearest(nb, ib, q)]
                     tie_seps += self._cw_overlap(chains, samples, nearest, (na, ia, nb, ib, q, sin, ua), a_up)
                 bound(tie_seps, cp)
-            got = _cw.solve(d_, cp, deadline=deadline)
+            got = solve_stage()
             for n in idx:
                 zs[n] = got[loc[n]]
         couplings = couplings + [(nu, ju, nl, jl, "ge", c_) for nu, ju, nl, jl, c_ in seps]
@@ -3124,6 +3168,10 @@ class _Planner:
             reg = self._cw_region(mapcells.cell_of(float(la[0]), float(lo[0])))
         except Exception as e:      # (the rules as before)
             log.debug("grading: carriageway at %s: %s: %s", np.round(mid, 1), type(e).__name__, e)
+            return None
+        if reg.get("failed"):
+            import revisit
+            revisit.fault()         # also on later reads of the session's memoized failed region
             return None
         best = None
         for q in reg["parts"]:
@@ -3297,11 +3345,21 @@ class _Planner:
     def _cell_enu_calc(self, k, ground):
         parts = {}
         f = self.md.cell(k, layers=("roads",), kind="demand").layers.get("roads")
+        span_ll = []
         if f is not None and len(f):
             bs = roadsmod.bridge_specs(f)
             rs = roadsmod.road_specs(f, None, self.widths) if ground else [None] * len(f)
+            classes = f.attrs.get("class")
+            subtypes = f.attrs.get("subtype")
             for i in range(len(f)):
                 if bs[i] is None and rs[i] is None:
+                    cls = str(classes[i]) if classes is not None else ""
+                    sub = str(subtypes[i]) if subtypes is not None else "road"
+                    if sub == "road" and cls in WALK_SPAN_CLASSES:
+                        for ring in roadsmod.bridge_parts(f, i):
+                            ring = np.asarray(ring, np.float64)
+                            if len(ring) >= 2:
+                                span_ll.append(ring)
                     continue
                 fid = str(f.ids[i])
                 # (a bridge part's level: OSM's layer as Overture's level rules, 1 without one; stacked decks' order)
@@ -3364,9 +3422,18 @@ class _Planner:
             for ring, out_ in [(r, rail_xy) for r in rail] + [(r, rail_gxy) for r in rail_g]:
                 out_.append(rxy[k0:k0 + len(ring)])
                 k0 += len(ring)
+        span_xy = []
+        if span_ll:
+            alls = np.concatenate(span_ll)
+            se, sn, _ = self.frame.geodetic_to_enu(alls[:, 1], alls[:, 0], 0.0)
+            sxy = np.stack([np.asarray(se, np.float64), np.asarray(sn, np.float64)], axis=1)
+            k0 = 0
+            for ring in span_ll:
+                span_xy.append(sxy[k0:k0 + len(ring)])
+                k0 += len(ring)
         return {"bridges": bridges, "bridge_cls": bcls, "bridge_ids": bids, "bridge_levels": blevels,
                 "bridge_half": bhalf, "ground": ground_l, "ground_ids": ground_ids,
-                "end_of": end_of,
+                "end_of": end_of, "span_bridges": span_xy,
                 "ends": np.asarray(ends, np.float64).reshape(-1, 2), "rail_bridges": rail_xy, "rail_ground": rail_gxy}
 
     def _decks_ll(self, lonlat):
@@ -3402,8 +3469,9 @@ class _Planner:
                 short = True
                 continue
             halves = c.get("bridge_half") or [0.0] * len(c["bridges"])
-            for line, half in list(zip(c["bridges"], halves)) + [(r, railwaysmod.DECK_HALF_M)
-                                                                    for r in c.get("rail_bridges", ())]:
+            for line, half in (list(zip(c["bridges"], halves))
+                               + [(r, railwaysmod.DECK_HALF_M) for r in c.get("rail_bridges", ())]
+                               + [(r, WALK_SPAN_HALF_M) for r in c.get("span_bridges", ())]):
                 if len(line) < 2 or half <= 0:
                     continue
                 k2 = (round(float(line[0, 0]), 1), round(float(line[0, 1]), 1), round(float(line[-1, 0]), 1), len(line))
@@ -3779,7 +3847,51 @@ class _Planner:
                 log.debug("grading: the chain store's drowned: %s: %s", type(e).__name__, e)
         return self._chains_for().drowned(key, ring)
 
-    def _tunnel_sections(self, feats, key=None, road_plans=()):
+    def _subsea_part(self, feats, i, j, ring, portals):
+        """The canonical region's solved wet profile, including its dry approaches. None: ordinary tunnel rules.
+
+        The grading reader uses the same raw source, region frame and native solve as the mesh reader. It never
+        calls a grader from a profile endpoint: planning the tunnel must not recursively plan itself.
+        """
+        import geotiles
+        holder = self.store if self.store is not None else self
+        with holder.lock:
+            cs = getattr(holder, "_subsea_chains", None)
+            if cs is None:
+                raw = self.tunnel_raw or self.elev
+                md, wet, water = self.md, self.wet, self.water
+                def setup(t):
+                    t.wet, t.water, t.raw = wet, water, raw
+                cs = holder._subsea_chains = roadsmod.ChainStore(roadsmod.TunnelProfiles,
+                    lambda k: md.cell(k, layers=("roads",), kind="demand").layers.get("roads"), raw, setup)
+        st = cs.store_at(float(ring[0][1]), float(ring[0][0]))
+        k = (str(feats.ids[i]), j)
+        if not st.drowned(k, ring):
+            return None
+        whole = roadsmod.BridgeProfiles.parts_todo(st, [(k, feats, i)])
+        pid = st._part_id(k)
+        with st.lock:
+            supported = pid in st._subsea
+            secs = list(st.sections.get(pid, ()))
+        if not supported:
+            return []
+        out = []
+        for _pid, spec, xy, z, _lon in whole:
+            la, lo, h = geotiles.world_to_geodetic(st.frame, np.c_[xy, z])
+            e, n, _ = self.frame.geodetic_to_enu(la, lo, 0.)
+            xy = np.c_[e, n]
+            for index, (a, b, kind) in enumerate(secs):
+                if b <= a: continue
+                fid = f"{pid}#{index}"
+                # Plans are the terrain datum: apply(..., ROAD_LIFT) supplies the physical road surface.
+                # The native tunnel profile already IS that surface, so do not add the lift a second time.
+                out.append((fid, spec, xy[a:b + 1], np.asarray(h)[a:b + 1] - ROAD_LIFT, kind))
+                if kind and portals is not None:
+                    for at, is_mouth in zip((a, b), st.mouth(fid)):
+                        portals[(fid, tuple(np.round(xy[at], 3)))] = is_mouth
+        return out
+
+    def _tunnel_sections(self, feats, key=None, road_plans=(), portals=None):
         """[(fid, spec, xy, z, kind)] of the tunnels' sections (roads.tunnel_sections on the ungraded ground, its
         ends graded by road_plans: the cell's road Plans, as roads.TunnelProfiles.ends grades them with the roads'
         plans alone): kind 0 an open road at z, 1 a low arch, 2 a full tunnel."""
@@ -3795,6 +3907,11 @@ class _Planner:
                 ll = np.asarray(ring, np.float64)
                 if len(ll) < 2:
                     continue
+                if self.water is not None:
+                    solved = self._subsea_part(feats, i, j, ring, portals)
+                    if solved is not None:
+                        out.extend(solved)
+                        continue
                 E, N, _ = self.frame.geodetic_to_enu(ll[:, 1], ll[:, 0], 0.0)
                 xy, s = resample(np.stack([np.asarray(E), np.asarray(N)], axis=1), VERTEX_STEP)
                 if len(xy) < 2 or s[-1] <= 0:
@@ -3853,7 +3970,7 @@ class _Planner:
         return lines, halves
 
     @staticmethod
-    def _mouth_plans(secs):
+    def _mouth_plans(secs, portals=None):
         """(fid, Plan) of the covered sections' mouths: the floor MOUTH_PLAN_M into the tube from a portal (where an
         open section or nothing comes before / after it): the ground at the portal graded to the road on both sides
         of it (the grading faded from the road's plan into the ungraded hill there, and the road tile and the
@@ -3867,6 +3984,9 @@ class _Planner:
             s = np.r_[0.0, np.cumsum(np.hypot(*np.diff(xy, axis=0).T))]
             hw = spec.width / 2 + shoulder(spec)
             for at_start in (True, False):
+                endpoint = xy[0 if at_start else -1]
+                if portals is not None and portals.get((fid, tuple(np.round(endpoint, 3)))) is False:
+                    continue
                 nb = n - 1 if at_start else n + 1
                 if same(nb) and secs[nb][4] != 0:
                     continue                    # inside the hill: a full tunnel goes on
@@ -4098,6 +4218,8 @@ class PlanStore:
         global _ACTIVE_STORE
         _ACTIVE_STORE = self
         self.wet = None
+        self.water = None
+        self.tunnel_raw = None
         self.dem = None
         self.shared = None
         self.lock = threading.Lock()
@@ -4193,6 +4315,8 @@ class Grader:
     def _set(name):
         return property(lambda self: getattr(self.store, name), lambda self, v: setattr(self.store, name, v))
     wet = _set("wet")
+    water = _set("water")
+    tunnel_raw = _set("tunnel_raw")
     dem = _set("dem")
     shared = _set("shared")
     del _set
