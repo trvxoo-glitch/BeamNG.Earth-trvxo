@@ -677,17 +677,38 @@ class ServerCacheTest(Base):
         cache_msgs = [m for m in msgs if m["type"] == "cache"]
         self.assertEqual([m["type"] for m in msgs[:2]], ["hello", "cache"], "the usage follows hello")
         self.assertEqual(cache_msgs[0], {"type": "cache", "v": 1, "usedBytes": 3 * MB, "capBytes": 20_000_000_000,
-                                         "files": 2, "ready": True, "managed": True})
+                                         "files": 2, "ready": True, "managed": True, "autoClear": True})
         self.assertEqual(cache_msgs[1]["capBytes"], 5_000_000_000)
         self.assertEqual(len(cache_msgs), 4)
         self.assertEqual((cache_msgs[3]["clearedBytes"], cache_msgs[3]["usedBytes"]), (MB, 2 * MB))
         self.assertFalse(exists(self.root, "cache/imagery/usgs/16/1/0.jpg"))
         s.imagery.close()
 
+    def test_auto_clear_switch(self):
+        """Off (the settings page): nothing goes by itself, over the cap or for the drive's room; Clear cache still does."""
+        for i in range(3):
+            put(self.root, f"cache/imagery/usgs/16/1/{i}.jpg", MB, T0 - 2 * DAY + i)
+        disk = cachemod.Cache(os.path.join(self.root, "cache"), 0.000002, now=self.clock, start=False)    # a 2 MB cap
+        disk.scan()
+        s = earthd.Server(self.root, os.path.join(self.root, "cache"), imagery=None, cache=disk)
+        conn = types.SimpleNamespace(s=s, sent=[])
+        conn.send = conn.sent.append
+        earthd.Connection.on_cache(conn, {"autoClear": False})
+        self.assertFalse(disk.auto_clear)
+        self.assertEqual(conn.sent[-1]["autoClear"], False)
+        disk.tick()
+        self.assertEqual(disk.free_space(2 * MB), 0)
+        self.assertEqual(disk.usage()[1], 3, "over the cap and short of room: nothing deleted")
+        earthd.Connection.on_cache(conn, {"autoClear": True})
+        self.assertTrue(disk.auto_clear)
+        self.assertEqual(disk.free_space(MB), MB)
+        disk.auto_clear = False
+        self.assertEqual(disk.clear()[0], 2, "Clear cache works with it off")
+
     def test_bad_cap_and_default_server(self):
         disk = cachemod.Cache(os.path.join(self.root, "c1"), 20, now=self.clock, start=False)
         s = earthd.Server(self.root, os.path.join(self.root, "c1"), imagery=None, cache=disk)
-        for bad in ({"capGb": "5"}, {"capGb": True}, {"capGb": -1}):
+        for bad in ({"capGb": "5"}, {"capGb": True}, {"capGb": -1}, {"autoClear": "off"}, {"autoClear": 0}):
             with self.assertRaises(ValueError):
                 earthd.Connection.on_cache(types.SimpleNamespace(s=s, send=lambda m: None), bad)
         self.assertEqual(disk.cap, 20_000_000_000)

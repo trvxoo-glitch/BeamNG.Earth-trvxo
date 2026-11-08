@@ -121,6 +121,9 @@ M.SCHEMA = {
   -- (typed on the page since 2026-10-29, the user: "change the cache limit setting to be a text box"; 0: unlimited.
   -- The old choices '5' .. '50' read as numbers, 'unlimited' as 0: MIGRATE)
   cacheCapGb = { kind = 'number', default = 20, min = 0, max = 100000, label = 'Download cache size (GB, 0: unlimited)' },
+  -- the download cache deleting its oldest files by itself (server cache.py): over the size cap, and to keep room free on
+  -- the drive (diskguard.py). Off: nothing is deleted until the player presses Clear cache
+  cacheAutoClear = { kind = 'bool', default = true, label = 'Clear the download cache automatically' },
   -- even frame pacing (framepacer.lua): frames shorter than the recent ones wait, so the game's time runs steadily
   framePacing = { kind = 'bool', default = true, label = 'Even frame pacing' },
   -- the world server's share of the CPU (server cpupin.player_settings reads them from this file when it starts;
@@ -150,7 +153,7 @@ M.ORDER = { 'quality', 'framePacing', 'terrainDetail', 'groundPhoto', 'trees', '
   'dashboardSatellite',
   'hudVisible', 'statusBar', 'profilerMode', 'runtimeProfiler',
   'placeNamesOnline', 'telemetry', 'telemetryPerf', 'telemetryNet', 'mapStyle', 'creditsVisible', 'beammpOnLaunch',
-  'creditsCorner', 'creditsSize', 'cacheCapGb', 'routeDownload', 'serverCores', 'serverPriority', 'teleportPriority', 'devOutlineKm',
+  'creditsCorner', 'creditsSize', 'cacheCapGb', 'cacheAutoClear', 'routeDownload', 'serverCores', 'serverPriority', 'teleportPriority', 'devOutlineKm',
   'devMapKm' }
 
 -- Stored but not on the settings page
@@ -356,6 +359,7 @@ function M.get(key) return values[key] end
 
 -- The download cache's cap for the server: GB, 0 = unlimited.
 function M.cacheCapGb() return math.max(0, tonumber(values.cacheCapGb) or 0) end
+function M.cacheAutoClear() return values.cacheAutoClear ~= false end
 
 -- bytes as the page shows them: "350 MB", "1.2 GB", "20 GB" (decimal units, as the cap)
 local function size(b, whole)
@@ -515,6 +519,10 @@ M.APPLY = {
   cacheCapGb = function()
     local core = ext('beamngEarth_core')
     if core and core.cacheSetCap then core.cacheSetCap(M.cacheCapGb()) end
+  end,
+  cacheAutoClear = function()
+    local core = ext('beamngEarth_core')
+    if core and core.cacheSetAutoClear then core.cacheSetAutoClear(M.cacheAutoClear()) end
   end,
   devOutlineKm = function(v)
     local dev = ext('beamngEarth_dev')

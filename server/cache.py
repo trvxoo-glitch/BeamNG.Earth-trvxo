@@ -149,6 +149,7 @@ class Cache(NoCache):
         self._used = 0              # bytes of the entries with a known size
         self._cap = None            # bytes, 0 = unlimited (set below)
         self._dirty = False
+        self.auto_clear = True      # off (the settings page): nothing is evicted or freed by itself, only clear() deletes
         self.ready = False          # the start-up walk is done
         self._ready_ev = threading.Event()
         self._last_evict = None
@@ -472,6 +473,15 @@ class Cache(NoCache):
                      _gb(self._used), _gb(cap) if cap else "unlimited")
         return n, b
 
+    def free_space(self, nbytes):
+        """The drive is nearly full (diskguard.py): give back nbytes, least recently used files first, whatever the cap
+        (also an unlimited one). The files evict() never removes stay (this run's place, saved areas, gravity/).
+        Returns the bytes removed (0 before the start-up walk is done or when the cache is not ours)."""
+        if nbytes <= 0 or not self.managed or not self.ready or not self.auto_clear:
+            return 0
+        _n, b = self.evict(target=max(0, self._used - int(nbytes)))
+        return b
+
     def _unpinned(self, items, key_of):
         """items without the ones whose key is in a saved area (pinned; outside the lock: a batch call)."""
         pinned = self.pinned
@@ -564,7 +574,7 @@ class Cache(NoCache):
         """The `cache` message for the mod's settings page (cleared: bytes freed by a clear)."""
         used, files = self.usage()
         m = {"type": "cache", "v": MSG_VERSION, "usedBytes": int(used), "capBytes": int(self._cap),
-             "files": files, "ready": self.ready, "managed": self.managed}
+             "files": files, "ready": self.ready, "managed": self.managed, "autoClear": self.auto_clear}
         if cleared is not None:
             m["clearedBytes"] = int(cleared)
         if self.pinned_bytes is not None:
@@ -578,7 +588,7 @@ class Cache(NoCache):
             return
         now = self.now()
         cap = self._cap
-        if cap and self._used > cap and (self._last_evict is None or now - self._last_evict >= EVICT_S):
+        if self.auto_clear and cap and self._used > cap and (self._last_evict is None or now - self._last_evict >= EVICT_S):
             self.evict()
         if now - self._last_save >= SAVE_S:
             self.save()

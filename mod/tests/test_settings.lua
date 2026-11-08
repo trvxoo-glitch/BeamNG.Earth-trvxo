@@ -308,6 +308,14 @@ T.check(capsSent[1] == 50 and capsSent[2] == 0 and files[settings.FILE].cacheCap
   'cache cap: saved, sent to the server in GB (unlimited = 0)')
 settings.applyAll()
 T.check(capsSent[3] == 0, 'cache cap: applied with the rest (the level start)')
+T.check(settings.defaults().cacheAutoClear == true and settings.cacheAutoClear() == true, 'auto clear: on by default')
+local autoSent = {}
+beamngEarth_core.cacheSetAutoClear = function(on) autoSent[#autoSent + 1] = on; return connected end
+settings.uiSet('cacheAutoClear', false)
+T.check(settings.cacheAutoClear() == false and autoSent[1] == false and files[settings.FILE].cacheAutoClear == false,
+  'auto clear: saved off and sent to the server')
+settings.uiSet('cacheAutoClear', true)
+T.check(settings.cacheAutoClear() == true and autoSent[2] == true, 'auto clear: back on')
 T.check(settings.cacheLine(nil) == 'no information from the server', 'cache line: no server (or one without a cache)')
 T.check(settings.cacheLine({ usedBytes = 3e9, capBytes = 20e9, files = 10, ready = true, managed = true,
   pinnedBytes = 1.5e9 }) == '3.0 GB of 20 GB, 10 files, 1.5 GB in saved areas (Clear cache keeps them)',

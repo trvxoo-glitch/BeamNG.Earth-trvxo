@@ -141,7 +141,7 @@ MOD_TO_SERVER = {
              "guardHold": F(bool, OPT)},
     # the download cache (cache.py; additive): the page's size cap (GB, 0 = unlimited), a clear, or
     # neither (fresh usage numbers); always answered with a 'cache'
-    "cache": {"capGb": F(NUM, OPT), "clear": F(bool, OPT)},
+    "cache": {"capGb": F(NUM, OPT), "autoClear": F(bool, OPT), "clear": F(bool, OPT)},
     # 2026-10-25: the settings page's cache folder / BeamMP launcher (apppaths.py): chosen in a window or typed
     "app_path": {"what": F(str, OPT), "pick": F(bool, OPT), "path": F(str, OPT)},
     # the ground's collision patch under another vehicle's collision island off the block (terrainpatch.lua / .py)
@@ -347,6 +347,9 @@ SERVER_TO_MOD = {
     # the loading line's counts (Connection.send_progress, the mod's loadprogress.lua): [done, wanted] each
     # the server writes where the game does not look (Server.check_user_dir, GitHub #770)
     "user_dir_mismatch": {"game": F(str), "server": F(str)},
+    # a drive the server writes to is nearly full (diskguard.py; earthd.disk_low_message)
+    "disk_low": {"path": F(str), "cache": F(bool), "session": F(bool), "freeBytes": F(int), "reserveBytes": F(int),
+                 "freedBytes": F(int)},
     "load_progress": {"anchorId": F(int), "ground": F(list), "roads": F(list), "trees": F(list), "far": F(list),
                       "net": F(list)},     # (the downloads in flight: loadprogress.downloadText)
     # road tiles near the player (roads.py; additive, with map data only): a JSON file of DecalRoad chunks
@@ -409,7 +412,7 @@ SERVER_TO_MOD = {
                      "lightsShape": F(str, OPT), "lights": F(str, OPT), "lightsMaterial": F(str, OPT)},
     "app_paths": {"cacheDir": F(str), "cacheNext": F(str), "beammp": F(str), "result": F(dict, OPT)},
     "cache": {"v": F(int), "usedBytes": F(int), "capBytes": F(int), "files": F(int), "ready": F(bool),
-              "managed": F(bool), "clearedBytes": F(int, OPT),
+              "managed": F(bool), "autoClear": F(bool), "clearedBytes": F(int, OPT),
               "pinnedBytes": F(int, OPT)},     # the saved areas' files (areas.py; kept by a clear)
 }
 WEATHER_NESTED = {"cover": {"total", "low", "mid", "high"}, "wind": {"ms", "fromDeg", "gustMs"},
@@ -432,6 +435,7 @@ EXERCISED_ELSEWHERE = {"far_retex", "roads_tile", "roads_drop",   # roads: needs
                        "veg_tile", "veg_drop",                       # --trees on: needs map data
                        "turbines_tile", "turbines_drop",             # turbineGeo: test_windturbine_farstream
                        "user_dir_mismatch",                          # another user folder than the game's (test_user_dir)
+                       "disk_low",                                   # a nearly full drive (test_diskguard)
                        "bldfar_tile", "bldfar_drop",                 # --buildings on: needs map data
                        "bldsky_tile", "bldsky_drop", "brfar_tile", "brfar_drop",
                        "navgraph",                                   # --traffic on: needs map data
@@ -638,6 +642,7 @@ class CacheAgreementTest(unittest.TestCase):
         on_msg = lua_function(core, "onMessage")
         hello = on_msg[on_msg.index("t == 'hello'"):on_msg.index("t == 'status'")]
         self.assertIn("net.send({ type = 'cache', capGb = settings.cacheCapGb() })", hello)
+        self.assertIn("net.send({ type = 'cache', autoClear = settings.cacheAutoClear() })", hello)
         self.assertIn("cacheInfo = nil", hello)
         self.assertIn("cacheInfo = nil", on_msg[on_msg.index("t == '_disconnected'"):on_msg.index("t == 'hello'")])
         self.assertIn("cacheInfo = { usedBytes = tonumber(msg.usedBytes)", on_msg[on_msg.index("t == 'cache'"):])
@@ -652,6 +657,8 @@ class CacheAgreementTest(unittest.TestCase):
         row = re.search(r'\{ id: "cacheCapGb", type: "number", default: (\d+), min: 0,', page)
         self.assertIsNotNone(row, "the page's cacheCapGb: a number box")
         self.assertEqual(row.group(1), m.group(1))
+        self.assertRegex(page, r'\{ id: "cacheAutoClear", type: "bool", default: true,')
+        self.assertIn("cacheAutoClear = { kind = 'bool', default = true,", settings)
         self.assertIn("beamngEarth_settings.uiCacheClear()", page)
 
 
