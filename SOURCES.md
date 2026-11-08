@@ -27,6 +27,8 @@ dual-stack endpoint (`s3.dualstack.<region>.amazonaws.com`, IPv4 and IPv6) after
 route; everywhere else they are used as listed. The source names remain the identities for download budgets, status,
 cached files and `NO_PROXY`. Signed URLs, requests with an Authorization header and proxied requests keep their
 original endpoint. Other providers still need their own IPv6 support.
+For the OpenStreetMap keys read by the server and weekly data builders, see the
+[OSM tag inventory](docs/OSM_TAGS.md) and [Taginfo project file](docs/taginfo.json).
 
 | Source | Address | What it builds | If it does not answer | Status line |
 |---|---|---|---|---|
@@ -61,6 +63,7 @@ national photos, then worldwide satellite photos. If one does not answer, the ne
 | USGS / USDA NAIP aerial photos | `imagery.nationalmap.gov` | the lower 48 US states, 30-60 cm per pixel, near you | Coarser photos meanwhile. | named |
 | USDA NAIP aerial photos (second source) | `apps.geo.fpac.usda.gov` | the same photos, from the US Department of Agriculture | Coarser photos meanwhile. | named |
 | USGS The National Map photos | `basemap.nationalmap.gov` | the US, the middle distance and the distant land | Sentinel-2 satellite photos meanwhile. | named |
+| BeamNG.Earth's own tile host (Sentinel-2, ESA WorldCover 2021 composite, CC BY 4.0) | `tiles.tgforever.net` | the whole land to ~40 m per pixel, the distant land; packs of 64 tiles a request (Cloudflare R2). Only while the project's switch file (cdn.json in BeamNG.Earth-data) turns it on. | The sources below, as before. | named |
 | Sentinel-2 cloudless (EOX) | `tiles.maps.eox.at` | the whole world, 10 m per pixel; the distant land everywhere and the near ground outside the regions above. Also the world map's base layers. | New ground outside the regions above may stay plain (the land cover's colours). | named |
 
 Regional services, each used only inside its own area:
