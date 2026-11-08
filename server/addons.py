@@ -59,6 +59,7 @@ import hashlib
 import json
 import logging
 import os
+import staging
 import re
 import threading
 import time
@@ -339,7 +340,7 @@ class GitHubCache:
         tmp = p + ".tmp"
         with open(tmp, "w", encoding="utf-8") as f:
             json.dump(d, f)
-        os.replace(tmp, p)
+        staging.replace_retry(tmp, p)
 
     def get(self, url, accept="application/vnd.github+json", fresh=False):
         with self.lock:
@@ -748,7 +749,7 @@ class Addons:
             if why:
                 _remove(part)
                 raise AddonError(why)
-            os.replace(part, tmp)
+            staging.replace_retry(part, tmp)
             op = "update" if inst["installed"] else "install"
             log.info("add-ons: %s %s %s (%s, %d bytes, sha256 %s) staged as %s", op, aid, best["tag"], a["name"],
                      a["size"], a["sha256"][:12], os.path.basename(tmp))
@@ -813,7 +814,7 @@ class Addons:
             self.runner.stop(aid)
             if inst and inst["file"] != a["name"]:
                 _remove(os.path.join(d, inst["file"]))
-            os.replace(part, os.path.join(d, a["name"]))
+            staging.replace_retry(part, os.path.join(d, a["name"]))
             self.runner.save_state(aid, file=a["name"], tag=best["tag"], sha256=a["sha256"],
                                    local=bool(best.get("local")))
             log.info("add-ons: %s %s %s (%s, %d bytes, sha256 %s) in %s", "update" if inst else "install", aid,
@@ -906,7 +907,7 @@ class Addons:
         os.makedirs(d, exist_ok=True)
         with open(os.path.join(d, OPTIONS_FILE + ".tmp"), "w", encoding="utf-8") as f:
             json.dump(cur, f)
-        os.replace(os.path.join(d, OPTIONS_FILE + ".tmp"), os.path.join(d, OPTIONS_FILE))
+        staging.replace_retry(os.path.join(d, OPTIONS_FILE + ".tmp"), os.path.join(d, OPTIONS_FILE))
         log.info("add-ons: %s options saved: %s", aid, cur)
         if e["kind"] == "companion" and self.runner.running(aid):
             self.runner.stop(aid)
@@ -1041,7 +1042,7 @@ class Addons:
         os.makedirs(os.path.dirname(p), exist_ok=True)
         with open(p + ".tmp", "w", encoding="utf-8") as f:
             json.dump(doc, f, indent=2)
-        os.replace(p + ".tmp", p)
+        staging.replace_retry(p + ".tmp", p)
 
     def openable_local(self, url):
         """A companion's own local web page (its entry's run.page, any path under its origin)."""

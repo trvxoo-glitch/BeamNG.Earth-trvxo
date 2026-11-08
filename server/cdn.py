@@ -8,6 +8,7 @@ spending cap), read at the server's start and every SWITCH_TTL_S; unreachable or
 import json
 import logging
 import os
+import staging
 import time
 
 import imagery as imagerymod
@@ -41,7 +42,7 @@ def switch(fetcher, cache_dir):
         os.makedirs(os.path.dirname(path), exist_ok=True)
         with open(path + ".tmp", "w") as fh:
             json.dump(doc, fh)
-        os.replace(path + ".tmp", path)
+        staging.replace_retry(path + ".tmp", path)
         return doc
     except Exception as e:          # (offline, not there yet: the original sources)
         log.info("cdn: no switch file (%s: %s): off", type(e).__name__, e)

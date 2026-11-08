@@ -917,7 +917,7 @@ def write_process_totals():
         tmp = path + ".tmp"
         with open(tmp, "w") as fh:
             json.dump({"pid": os.getpid(), "at": time.time(), "hosts": process_totals()}, fh)
-        os.replace(tmp, path)
+        staging.replace_retry(tmp, path)
     except OSError as e:
         log.debug("net: process totals: %s", e)
 

@@ -12,6 +12,7 @@ the Add-ons page; "Start with BeamNG.Earth" (autostart) starts it when the serve
 import json
 import logging
 import os
+import staging
 import re
 import subprocess
 import sys
@@ -111,7 +112,7 @@ class Runner:
         os.makedirs(self.dir(aid), exist_ok=True)
         with open(p + ".tmp", "w", encoding="utf-8") as f:
             json.dump(d, f)
-        os.replace(p + ".tmp", p)
+        staging.replace_retry(p + ".tmp", p)
 
     def installed(self, aid):
         st = self.state(aid)

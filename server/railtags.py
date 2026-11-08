@@ -276,7 +276,7 @@ def _save_idx(path, shard):
             np.savez(fh, ids=w.ids, idx=w.idx,
                      tags=np.frombuffer(json.dumps(w.tags, separators=(",", ":")).encode("utf-8"), np.uint8),
                      rest=np.frombuffer(json.dumps(rest, separators=(",", ":")).encode("utf-8"), np.uint8))
-        os.replace(path + ".part", path)
+        staging.replace_retry(path + ".part", path)
     except OSError as e:
         log.debug("%s: %s", path, e)
 
