@@ -44,6 +44,55 @@ def version():
         return f.read().strip()
 
 
+# server_data(): the server's files that go into the app beside its modules. Not code (the modules go in as hidden
+# imports, the Rust kernel as a binary), not the folder's notes, not the tests; of the Overture STAC indexes only the
+# pinned release's (overture.BUNDLED; an older one may still be on a developer's disk)
+DATA_SKIP_DIRS = {"tests", "__pycache__"}
+DATA_SKIP_NAMES = {"README.md", "requirements.txt"}
+DATA_SKIP_EXT = (".py", ".pyc", ".pyo", ".pyd", ".so", ".dll", ".dylib")
+
+
+def _tracked(root, sub):
+    """The files git tracks under root/sub (relative to root, '/'), or None outside a git checkout."""
+    try:
+        out = subprocess.run(["git", "-C", root, "ls-files", "-z", "--", sub], capture_output=True, check=True)
+    except (OSError, subprocess.CalledProcessError):
+        return None
+    names = [n for n in out.stdout.decode("utf-8", "replace").split("\0") if n]
+    return names or None
+
+
+def _walked(root, sub):
+    out = []
+    for dirpath, dirnames, filenames in os.walk(os.path.join(root, sub)):
+        dirnames[:] = sorted(d for d in dirnames if d not in DATA_SKIP_DIRS and not d.startswith("."))
+        for name in sorted(filenames):
+            out.append(os.path.relpath(os.path.join(dirpath, name), root).replace(os.sep, "/"))
+    return out
+
+
+def server_data(root=ROOT, release=None, files=None):
+    """[(source path, folder inside the app)] of the server's data files: the ones git tracks under server/ (a source
+    copy without git: the ones there), with their folders kept (server/data/fonts/x.ttf -> data/fonts)."""
+    release = release or _overture_release()
+    names = files if files is not None else (_tracked(root, "server") or _walked(root, "server"))
+    out = []
+    for rel in sorted(names):
+        parts = rel.split("/")
+        if parts[0] != "server" or len(parts) < 2 or any(p in DATA_SKIP_DIRS or p.startswith(".") for p in parts[1:-1]):
+            continue
+        name = parts[-1]
+        if name in DATA_SKIP_NAMES or name.endswith(DATA_SKIP_EXT) or name.startswith("."):
+            continue
+        if name.startswith("overture_stac_") and name != f"overture_stac_{release}.json.gz":
+            continue
+        src = os.path.join(root, *parts)
+        if not os.path.isfile(src):         # (tracked but deleted in this checkout)
+            continue
+        out.append((src, "/".join(parts[1:-1]) or "."))
+    return out
+
+
 def make_icons(work):
     """icon.png (256 px, the level's preview cropped square) and icon.ico."""
     from PIL import Image
@@ -155,28 +204,12 @@ def pyinstaller(work, ico, onefile, ver=None, boot=None):
            "--add-data", f"{os.path.join(ROOT, 'CREDITS.md')}{SEP}.",
            "--add-data", f"{os.path.join(ROOT, 'docs', 'SHARED_WORLD.md')}{SEP}docs",
            "--add-data", f"{os.path.join(ROOT, 'docs', 'RELAUNCH_TROUBLESHOOTING.md')}{SEP}docs",
-           "--add-data", f"{os.path.join(ROOT, 'docs', 'STABILITY_VALIDATION.md')}{SEP}docs",
-           "--add-data", f"{os.path.join(server, 'bridges_us.npz')}{SEP}.",     # (bridgetypes.DB_PATH: beside the modules)
-           "--add-data", f"{os.path.join(server, 'bridges_wd.npz')}{SEP}.",     # (bridgetypes.WD_PATH)
-           "--add-data", f"{os.path.join(server, 'koppen_1991_2020_0p1.png')}{SEP}.",  # (climate.PATH)
-           "--add-data", f"{os.path.join(server, 'oil_wells.npz')}{SEP}.",  # (oilwells.PATH)
-           "--add-data", f"{os.path.join(server, 'wind_turbine_phase1.json')}{SEP}.",  # (windturbines.DATA_PATH)
-           "--add-data", f"{os.path.join(server, 'wind_turbines.npz')}{SEP}.",  # (windturbines.INDEX_PATH)
-           "--add-data", f"{os.path.join(server, 'wind_turbines.provenance.json')}{SEP}.",
-           "--add-data", f"{os.path.join(server, 'refineries.npz')}{SEP}.",  # (industry.PATH)
-           # (overture.BUNDLED: the pinned release's STAC index, tools/build_stac_index.py)
-           "--add-data", f"{os.path.join(server, 'overture_stac_' + _overture_release() + '.json.gz')}{SEP}.",
-           "--add-data", f"{os.path.join(server, 'lidarbc_index.json.gz')}{SEP}.",     # (lidarbc.INDEX_PATH)
-           "--add-data", f"{os.path.join(server, 'lidarbc_dsm_index.json.gz')}{SEP}.",     # (lidarbc.DSM_INDEX_PATH)
-           "--add-data", f"{os.path.join(server, 'lidarbc_ortho_index.json.gz')}{SEP}.",     # (bcortho.INDEX_PATH)
-           "--add-data", f"{os.path.join(server, 'usgs3dep_index.json.gz')}{SEP}.",     # (roadz.LIDAR_INDEX_PATH)
-           # the highway signs' lettering metrics and US state outlines (exitsigns.GLYPHS, signstates.DATA)
-           "--add-data", f"{os.path.join(server, 'sign_glyphs.json')}{SEP}.",
-           "--add-data", f"{os.path.join(server, 'sign_states.geojson')}{SEP}.",
-           # server/data/ (billboardsource.PATH: the mapped billboards; missing from 1.8.0's exe, a warning per worker)
-           "--add-data", f"{os.path.join(server, 'data')}{SEP}data",
-           "--add-data", f"{os.path.join(server, 'mile_markers_us.json')}{SEP}.",
-           "--add-data", f"{os.path.join(server, 'ky_interstate_medians.json')}{SEP}."]
+           "--add-data", f"{os.path.join(ROOT, 'docs', 'STABILITY_VALIDATION.md')}{SEP}docs"]
+    # the server's data files beside its modules (bridgetypes.DB_PATH, climate.PATH, server/data/, ...): every one the
+    # repo has, found rather than listed (a hand-kept list left server/data/billboards.npz out of 1.8.0's exe: no
+    # billboards for any player of it, a warning per worker; tests/test_build_app_data.py)
+    for src, dest in server_data():
+        cmd += ["--add-data", f"{src}{SEP}{dest}"]
     # the sources' fingerprint (peerwork.code_id: compute-sharing helpers build only for the same code)
     sys.path.insert(0, server)
     import peerwork
