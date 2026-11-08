@@ -41,6 +41,7 @@ import json
 import logging
 import math
 import os
+import staging
 import threading
 import time
 
@@ -307,7 +308,7 @@ class Areas:
             tmp = f"{p}.{os.getpid()}.tmp"
             with open(tmp, "w", encoding="utf-8") as f:
                 json.dump(doc, f, indent=1)
-            os.replace(tmp, p)
+            staging.replace_retry(tmp, p)
         except OSError as e:
             log.warning("areas: not saved: %s", e)
 
@@ -325,7 +326,7 @@ class Areas:
                 tmp = f"{p}.{os.getpid()}.tmp"
                 with open(tmp, "w", encoding="utf-8") as f:
                     f.write("".join(k + "\n" for k in list(keys)))
-                os.replace(tmp, p)
+                staging.replace_retry(tmp, p)
         except OSError as e:
             log.warning("areas: %s world list not saved: %s", aid, e)
 

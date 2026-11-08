@@ -11,6 +11,7 @@ import gzip
 import json
 import logging
 import os
+import staging
 import re
 import threading
 import time
@@ -150,7 +151,7 @@ class Shards:
                     os.makedirs(self.dir, exist_ok=True)
                     with open(pin + ".part", "wb") as fh:
                         fh.write(body)
-                    os.replace(pin + ".part", pin)
+                    staging.replace_retry(pin + ".part", pin)
             except Exception as e:      # (offline, not published yet: without it)
                 log.debug("%s manifest: %s: %s", self.name, type(e).__name__, e)
                 with self.lock:
@@ -200,7 +201,7 @@ class Shards:
                 os.makedirs(d, exist_ok=True)
                 with open(path + ".part", "wb") as fh:
                     fh.write(body if body is not None else gzip.compress(b"{}"))
-                os.replace(path + ".part", path)
+                staging.replace_retry(path + ".part", path)
         if isinstance(got, dict) and isinstance(got.get("ways"), dict):
             got["ways"] = Ways.of(got["ways"])
             if side and isinstance(got["ways"], Ways):
@@ -275,7 +276,7 @@ def _save_idx(path, shard):
             np.savez(fh, ids=w.ids, idx=w.idx,
                      tags=np.frombuffer(json.dumps(w.tags, separators=(",", ":")).encode("utf-8"), np.uint8),
                      rest=np.frombuffer(json.dumps(rest, separators=(",", ":")).encode("utf-8"), np.uint8))
-        os.replace(path + ".part", path)
+        staging.replace_retry(path + ".part", path)
     except OSError as e:
         log.debug("%s: %s", path, e)
 

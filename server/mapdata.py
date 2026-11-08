@@ -534,7 +534,7 @@ class MapData:
         tmp = f"{path}.{os.getpid()}.tmp"
         with open(tmp, "w", encoding="utf-8") as f:
             json.dump(rows, f)
-        os.replace(tmp, path)
+        staging.replace_retry(tmp, path)
         now = time.monotonic()
         if now - getattr(self, "_osm_pruned", -1e9) >= osmfuel.PRUNE_EVERY_S and hasattr(self.osmfuel, "version"):
             self._osm_pruned = now                  # (its blocks under a cap)

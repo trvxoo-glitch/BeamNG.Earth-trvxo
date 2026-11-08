@@ -10,6 +10,7 @@ row. A cell is remembered for the session.
 import json
 import logging
 import os
+import staging
 import re
 import threading
 import time
@@ -153,7 +154,7 @@ class Source:
                 os.makedirs(os.path.dirname(pin), exist_ok=True)
                 with open(pin + ".tmp", "w") as f:
                     f.write(f"{etag}\n{size}\n{time.time()}\n")
-                os.replace(pin + ".tmp", pin)
+                staging.replace_retry(pin + ".tmp", pin)
             d = os.path.join(self.raw_dir, "picnicsource", re.sub(r"[^A-Za-z0-9]+", "_", etag).strip("_"))
             self._remote = (etag, rangeread.RemoteFile([self.url], size, d, self.fetcher, if_match=etag))
             self._checked = time.time()

@@ -18,6 +18,7 @@ import logging
 import math
 import multiprocessing
 import os
+import staging
 import sys
 import time
 import zlib
@@ -106,7 +107,7 @@ def store_put(share_dir, iid, key, code, data, chunk):
     tmp = os.path.join(d, iid + ".helper.tmp")
     with open(tmp, "w", encoding="ascii") as f:
         f.write(head + "\n" + "\n".join(parts))
-    os.replace(tmp, os.path.join(d, iid))
+    staging.replace_retry(tmp, os.path.join(d, iid))
 
 
 def _read(path):

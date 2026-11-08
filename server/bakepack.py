@@ -17,6 +17,7 @@ npz bytes) and "facts/<kind>/<extra>/<cell>" (roads' facts JSON). Packs live in 
 import json
 import logging
 import os
+import staging
 import struct
 import threading
 
@@ -69,7 +70,7 @@ class Writer:
                     break
                 out.write(chunk)
         os.remove(self.tmp + ".body")
-        os.replace(self.tmp, self.path)
+        staging.replace_retry(self.tmp, self.path)
         return len(self.items)
 
 
@@ -182,7 +183,7 @@ def _get(net, url, path, cap):
                     raise IOError(f"{url}: over {cap} bytes")
                 out.write(chunk)
             s.nbytes = n
-    os.replace(tmp, path)
+    staging.replace_retry(tmp, path)
 
 
 def sync(cache_dir, net, md, lat, lon, signature, now=None):

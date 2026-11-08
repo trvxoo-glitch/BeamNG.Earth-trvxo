@@ -48,6 +48,7 @@ Memory: about 200 bytes per tracked file (a 20 GB cache of 30 KB imagery tiles: 
 import logging
 import math
 import os
+import staging
 import ioprofiler
 import threading
 import time
@@ -198,7 +199,7 @@ class Cache(NoCache):
                 os.makedirs(self.root, exist_ok=True)
                 with open(tmp, "w") as f:
                     f.write(f"{LAYOUT_VERSION}\n")
-                os.replace(tmp, path)       # atomic: a second server never reads a half-written file
+                staging.replace_retry(tmp, path)       # atomic: a second server never reads a half-written file
             except OSError as e:
                 log.warning("cache: cannot write %s (%s): not managed", path, e)
                 return False
@@ -353,7 +354,7 @@ class Cache(NoCache):
             with open(tmp, "w", encoding="utf-8") as f:
                 f.write(f"{INDEX_HEADER}\tcap={cap}\n")
                 f.writelines(rows)
-            os.replace(tmp, path)
+            staging.replace_retry(tmp, path)
         except OSError as e:
             log.warning("cache: index not saved: %s", e)
             with self._lock:

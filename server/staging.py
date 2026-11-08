@@ -128,6 +128,24 @@ def read_held(read):
     return read()
 
 
+def replace_retry(tmp, path, waits=REPLACE_WAITS):
+    """replace(tmp, path) where the new content must go in (a pointer, an index, today's request counts, a plan): on
+    Windows a file another thread or process (the game, a second server, an antivirus or search indexer scanning the
+    new file) has open cannot be replaced for a moment (PermissionError, WinError 5 / 32), so it is tried again after
+    each of `waits`; the last try's error goes to the caller, whose own handling stays as it was (a player's netstats
+    "could not write the request statistics: [WinError 5] Access is denied", 2026-11-06; GitHub #67, #240, #241, #663
+    each fixed one writer). Every file rename in the server goes through here or replace_cached
+    (tests/test_atomic_replace.py)."""
+    for wait in tuple(waits) + (None,):
+        try:
+            replace(tmp, path)
+            return
+        except PermissionError:
+            if wait is None:
+                raise
+            time.sleep(wait)
+
+
 def replace_cached(tmp, path):
     """replace(tmp, path) for a cache file whose content is the same whoever writes it (a download, a decoded or built
     copy of one). On Windows a file another thread or process has open, or memory-mapped, cannot be replaced

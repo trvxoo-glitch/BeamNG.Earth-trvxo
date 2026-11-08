@@ -19,6 +19,7 @@ BNE_NETSTATS_PROC, this sums what changed since the last report).
 import json
 import logging
 import os
+import staging
 import platform
 import secrets
 import threading
@@ -72,7 +73,7 @@ def install_id(cache_dir):
         os.makedirs(cache_dir, exist_ok=True)
         with open(path + ".tmp", "w", encoding="ascii") as fh:
             fh.write(v)
-        os.replace(path + ".tmp", path)
+        staging.replace_retry(path + ".tmp", path)
     except OSError as e:
         log.debug("telemetry id: %s", e)
     return v
@@ -222,7 +223,7 @@ class Reporter:
                 d["perf_not_sent_yet"] = held
             with open(p + ".tmp", "w", encoding="utf-8") as fh:
                 json.dump(d, fh, indent=1)
-            os.replace(p + ".tmp", p)
+            staging.replace_retry(p + ".tmp", p)
         except OSError as e:
             log.debug("telemetry last: %s", e)
 

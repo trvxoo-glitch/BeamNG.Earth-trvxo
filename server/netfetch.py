@@ -47,6 +47,7 @@ import http.client
 import json
 import logging
 import os
+import staging
 import random
 import ssl
 import threading
@@ -916,7 +917,7 @@ def write_process_totals():
         tmp = path + ".tmp"
         with open(tmp, "w") as fh:
             json.dump({"pid": os.getpid(), "at": time.time(), "hosts": process_totals()}, fh)
-        os.replace(tmp, path)
+        staging.replace_retry(tmp, path)
     except OSError as e:
         log.debug("net: process totals: %s", e)
 
@@ -1366,7 +1367,7 @@ class Fetcher:
             tmp = f"{path}.{threading.get_ident()}.tmp"
             with open(tmp, "w") as f:
                 json.dump({"date": self._date, "hosts": self.snapshot()}, f, indent=1, sort_keys=True)
-            os.replace(tmp, path)
+            staging.replace_retry(tmp, path)
         except OSError as e:
             log.warning("net: could not write the request statistics: %s", e)
 

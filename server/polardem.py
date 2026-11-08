@@ -25,6 +25,7 @@ tileList.txt, fetched once) are 0 m.
 import logging
 import math
 import os
+import staging
 import threading
 from collections import OrderedDict
 from runtimeprofiler import ThreadPoolExecutor
@@ -118,7 +119,7 @@ class PolarDem:
             os.makedirs(self.dir, exist_ok=True)
             with open(path + ".tmp", "w", encoding="ascii") as f:
                 f.write(text)
-            os.replace(path + ".tmp", path)
+            staging.replace_retry(path + ".tmp", path)
         names = set()
         for line in text.split():
             parts = line.split("_")         # Copernicus_DSM_COG_10_S90_00_E000_00_DEM

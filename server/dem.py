@@ -460,7 +460,7 @@ class Dem:
                 tmp = f"{path}.{os.getpid()}.{threading.get_ident()}.tmp"
                 with open(tmp, "wb") as f:
                     f.write(body)
-                os.replace(tmp, path)
+                staging.replace_retry(tmp, path)
                 c["index"], c["at"], c["failed"] = idx, now, False
             except Exception as e:      # (offline, a host down, another format): ask every tile, as before
                 log.debug("dem: Mapterhorn coverage: %s: %s", type(e).__name__, e)

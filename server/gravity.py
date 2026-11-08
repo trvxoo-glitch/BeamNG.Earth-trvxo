@@ -34,6 +34,7 @@ import http.client
 import json
 import math
 import os
+import staging
 import ioprofiler
 import struct
 import sys
@@ -464,7 +465,7 @@ def _download(url, dest, sha256, size, attempts=10, min_rate=50e3, log=print, ne
             log(f"gravity: download attempt {i + 1} ended short; resuming")
             continue
         if _sha256(part) == sha256:
-            os.replace(part, dest)
+            staging.replace_retry(part, dest)
             return
         log("gravity: checksum mismatch; starting over")
         os.remove(part)
@@ -524,7 +525,7 @@ def ensure_egm2008(cache_dir=CACHE_DIR, log=print, net=None):
     lc = tri_len(d["corr_nmax"])
     arr[2, :lc], arr[3, :lc] = d["corr_c"], d["corr_s"]
     np.save(npy + ".tmp.npy", arr)
-    os.replace(npy + ".tmp.npy", npy)
+    staging.replace_retry(npy + ".tmp.npy", npy)
     with open(meta, "w") as f:
         json.dump({"source": EGM2008_URL, "sha256": EGM2008_SHA256, "nmax": EGM2008_NMAX,
                    "corr_nmax": d["corr_nmax"], "rows": ["c", "s", "corr_c", "corr_s"],

@@ -23,6 +23,7 @@ import json
 import logging
 import math
 import os
+import staging
 import re
 import threading
 import time
@@ -146,7 +147,7 @@ class OsmTags:
                 os.makedirs(os.path.dirname(pin), exist_ok=True)
                 with open(pin + ".tmp", "w") as f:
                     f.write(f"{etag}\n{size}\n{time.time()}\n")
-                os.replace(pin + ".tmp", pin)
+                staging.replace_retry(pin + ".tmp", pin)
             d = os.path.join(self.raw_dir, self.DIR, re.sub(r"[^A-Za-z0-9]+", "_", etag).strip("_"))
             self._remote = (etag, rangeread.RemoteFile([self.url], size, d, self.fetcher, if_match=etag))
             self._checked = time.time()
@@ -287,7 +288,7 @@ class OsmTags:
             tmp = f"{saved}.{os.getpid()}.{threading.get_ident()}.tmp"
             with open(tmp, "w", encoding="utf-8") as f:
                 json.dump({str(rg): g for rg, g in groups.items()}, f)
-            os.replace(tmp, saved)
+            staging.replace_retry(tmp, saved)
         except (OSError, TypeError, ValueError) as e:
             log.debug("osmtags: row groups not saved: %s", e)
         with self._lock:

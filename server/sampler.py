@@ -5,6 +5,7 @@ off without the variable. Wall-clock samples: a thread waiting on a lock or in C
 """
 import collections
 import os
+import staging
 import sys
 import threading
 import time
@@ -92,7 +93,7 @@ def start(path):
                         fh.write("\ncumulative (anywhere in the stack):\n")
                         for (t, k), n in cum_n.most_common(TOP * 2):
                             fh.write(f"  {n * INTERVAL_S:8.1f} s  {t:12s} {k}\n")
-                    os.replace(path + ".tmp", path)
+                    staging.replace_retry(path + ".tmp", path)
                 except OSError:
                     pass
 

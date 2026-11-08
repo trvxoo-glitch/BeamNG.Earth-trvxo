@@ -18,6 +18,7 @@ import logging
 import json
 import hashlib
 import os
+import staging
 import shutil
 import threading
 import time
@@ -253,14 +254,14 @@ class PlanCache:
                     # Optional export provenance must not disable normal local caching. Without a
                     # valid marker this cell remains unexportable, including any stale earlier marker.
                     pass
-            os.replace(tmp, p)
+            staging.replace_retry(tmp, p)
             # Export only plans whose complete-input condition the grader actually observed.
             # The digest binds the marker to this version; an interrupted replacement fails closed.
             marker = p + ".complete"
             if provenance is not None:
                 with open(tmp, "wb") as fh:
                     fh.write(provenance)
-                os.replace(tmp, marker)
+                staging.replace_retry(tmp, marker)
             else:
                 try:
                     os.remove(marker)
@@ -364,7 +365,7 @@ class PlanCache:
             tmp = f"{p}.{os.getpid()}.{threading.get_ident()}.tmp"
             with open(tmp, "wb") as fh:
                 np.savez(fh, **arrays)
-            os.replace(tmp, p)
+            staging.replace_retry(tmp, p)
         except (OSError, ValueError, TypeError):
             return False
         return True

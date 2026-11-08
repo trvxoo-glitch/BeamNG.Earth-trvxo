@@ -6,6 +6,7 @@ server's imagery round it (Imagery.render, as the terrain's photo), cropped to 1
 """
 import logging
 import os
+import staging
 import re
 
 import numpy as np
@@ -50,6 +51,6 @@ def write(imagery, user_dir, items):
         os.makedirs(os.path.dirname(out), exist_ok=True)
         tmp = out + ".tmp"
         pic.save(tmp, format="JPEG", quality=85)
-        os.replace(tmp, out)
+        staging.replace_retry(tmp, out)
         done.append(key)
     return done

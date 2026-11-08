@@ -485,7 +485,7 @@ class Reader:
             tmp = f"{path}.{os.getpid()}.{threading.get_ident()}.tmp"
             with open(tmp, "w", encoding="utf-8") as f:
                 json.dump({str(rg): g for rg, g in pg.items()}, f)
-            os.replace(tmp, path)
+            staging.replace_retry(tmp, path)
         except (OSError, TypeError, ValueError, AttributeError) as e:
             log.debug("overture: row groups not saved: %s", e)
 
@@ -757,7 +757,7 @@ class Reader:
                         tmp = f"{f}.{os.getpid()}.{threading.get_ident()}.tmp"
                         con.execute(f"""COPY (SELECT {proj} FROM read_parquet('{_q(u)}', file_row_number = true)
                             WHERE file_row_number BETWEEN {int(a)} AND {int(b)}) TO '{_q(tmp)}' (FORMAT parquet, ROW_GROUP_SIZE {RG_ROWS})""")
-                        os.replace(tmp, f)
+                        staging.replace_retry(tmp, f)
                     finally:
                         if mine:
                             xproc.release(f + ".lock")

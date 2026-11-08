@@ -40,6 +40,7 @@ import json
 import logging
 import math
 import os
+import staging
 import ioprofiler
 import queue
 import socket
@@ -315,7 +316,7 @@ class ReplyCache:
         tmp = f"{path}.{threading.get_ident()}.tmp"
         with open(tmp, "wb") as f:
             f.write(data)
-        os.replace(tmp, path)
+        staging.replace_retry(tmp, path)
         drop = []
         with self.lock:
             self.total += len(data) - self.sizes.pop(key, 0)

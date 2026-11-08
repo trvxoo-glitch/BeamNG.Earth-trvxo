@@ -53,6 +53,7 @@ import json
 import logging
 import math
 import os
+import staging
 import re
 import shutil
 import sys
@@ -766,7 +767,7 @@ class Store:
         tmp = f"{self.pointer_path}.{threading.get_ident()}.tmp"
         with open(tmp, "w", encoding="utf-8") as f:
             json.dump(p, f, indent=1, sort_keys=True)
-        os.replace(tmp, self.pointer_path)
+        staging.replace_retry(tmp, self.pointer_path)
 
     def _download(self, name, kind):
         r = self.fetcher.get(self.base_url + name, kind=kind, headers={"Accept-Encoding": "gzip"})
@@ -887,7 +888,7 @@ class Store:
         try:
             with open(tmp, "wb") as f:
                 pickle.dump(db, f, protocol=pickle.HIGHEST_PROTOCOL)
-            os.replace(tmp, path)
+            staging.replace_retry(tmp, path)
         except OSError as e:
             log.debug("airports: parsed copy not kept: %s", e)
             try:

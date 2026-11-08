@@ -16,6 +16,7 @@ import hashlib
 import json
 import logging
 import os
+import staging
 import threading
 import time
 
@@ -71,7 +72,7 @@ def manifest():
                 os.makedirs(d, exist_ok=True)
                 with open(os.path.join(d, "manifest.json.part"), "wb") as fh:
                     fh.write(body)
-                os.replace(os.path.join(d, "manifest.json.part"), os.path.join(d, "manifest.json"))
+                staging.replace_retry(os.path.join(d, "manifest.json.part"), os.path.join(d, "manifest.json"))
         except Exception as e:      # (offline, not published yet: the last one pinned on disk, else none)
             log.info("regional data manifest: %s: %s", type(e).__name__, e)
             d = _dir()
@@ -121,7 +122,7 @@ def _fetch(rel):
     os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path + ".part", "wb") as fh:
         fh.write(body)
-    os.replace(path + ".part", path)
+    staging.replace_retry(path + ".part", path)
     return body
 
 

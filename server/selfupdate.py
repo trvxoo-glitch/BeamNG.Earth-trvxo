@@ -13,6 +13,7 @@ and a file whose digest is missing or wrong is deleted, never run. A source copy
 import hashlib
 import json
 import os
+import staging
 import ioprofiler
 import sys
 import urllib.request
@@ -147,13 +148,13 @@ def download(net, current, path=None, progress=None):
         if (size and os.path.getsize(part) != size) or sha256_of(part) != digest:
             _remove(part)
             raise UpdateError("the downloaded file did not match GitHub's checksum (deleted)")
-        os.replace(part, dest)
+        staging.replace_retry(part, dest)
     if suffix == ".AppImage":
         os.chmod(dest, 0o755)
     tmp = os.path.join(folder, STAGED + ".tmp")
     with open(tmp, "w", encoding="utf-8") as f:
         json.dump({"version": version, "path": name, "sha256": digest}, f)
-    os.replace(tmp, os.path.join(folder, STAGED))
+    staging.replace_retry(tmp, os.path.join(folder, STAGED))
     return version, dest
 
 

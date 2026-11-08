@@ -22,6 +22,7 @@ folds the files into one and drops the lines whose zip is gone."""
 import hashlib
 import json
 import os
+import staging
 import re
 import threading
 import time
@@ -298,7 +299,7 @@ def compact(cache_dir, before=None):
         tmp = out + ".tmp"
         with open(tmp, "w", encoding="utf-8", newline="") as f:
             f.writelines(lines)
-        os.replace(tmp, out)
+        staging.replace_retry(tmp, out)
         for p in old:
             if p != out:
                 try:
@@ -343,7 +344,7 @@ def _link_or_copy(src, dst):
         os.link(src, tmp)
     except OSError:
         shutil.copyfile(src, tmp)
-    os.replace(tmp, dst)
+    staging.replace_retry(tmp, dst)
 
 
 def place(blob, dst):
@@ -392,13 +393,13 @@ def store(cache_dir, kind, k, blobs, extra=None, where=None, code=None):
                 st = f"{_side(path, n)}.{os.getpid()}.{threading.get_ident()}.tmp"
                 with open(st, "wb") as f:
                     f.write(b)
-                os.replace(st, _side(path, n))
+                staging.replace_retry(st, _side(path, n))
         inside = {n: (b.read() if isinstance(b, Side) else b) for n, b in blobs.items() if n not in side}
         with zipfile.ZipFile(tmp, "w", zipfile.ZIP_DEFLATED, compresslevel=1) as z:
             for name, data in inside.items():
                 z.writestr(name, data)
             z.writestr("meta.json", json.dumps({"names": list(inside), "side": side, "extra": extra}))
-        os.replace(tmp, path)
+        staging.replace_retry(tmp, path)
         if where is not None:
             _note(cache_dir, kind, k, where, code)
         return True
